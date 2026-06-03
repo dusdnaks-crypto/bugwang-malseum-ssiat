@@ -1,0 +1,331 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#426B4D" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="부광 말씀씨앗" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="format-detection" content="telephone=no" />
+  <link rel="apple-touch-icon" href="icons/icon-180.png" />
+  <title>부광 말씀씨앗</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="stylesheet" href="style.css" />
+  <script src="config.js"></script>
+</head>
+<body>
+  <div id="app" class="app-shell">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow" id="topEyebrow">부광교회 교회학교</p>
+        <h1 id="appTitle">부광 말씀씨앗</h1>
+      </div>
+      <button class="ghost small" id="openSettingsBtn" type="button" aria-label="계정 열기">계정</button>
+    </header>
+
+    <main>
+      <section id="view-home" class="view active" aria-labelledby="homeTitle">
+        <div class="hero-card">
+          <div>
+            <p class="eyebrow" id="heroEyebrow">오늘 마음에 심을 말씀</p>
+            <h2 id="homeTitle">부광의 다음세대 마음밭에 말씀을</h2>
+            <p class="muted" id="homeSubtext">오늘 외우고, 내일 다시 기억하고, 부광의 삶 속에 새겨 보세요.</p>
+          </div>
+          <div class="seed-badge" aria-hidden="true">🌱</div>
+        </div>
+
+        <section class="panel account-panel" id="accountPanel">
+          <div class="section-heading compact-heading">
+            <div>
+              <p class="eyebrow">Account</p>
+              <h3>사용자 계정</h3>
+            </div>
+            <button class="ghost small" id="homeAccountBtn" type="button">계정 만들기</button>
+          </div>
+          <div id="accountSummary" class="account-summary"></div>
+        </section>
+
+        <div class="stats-grid">
+          <article class="stat-card">
+            <span id="statVerses">0</span>
+            <p>등록된 말씀</p>
+          </article>
+          <article class="stat-card">
+            <span id="statDue">0</span>
+            <p>오늘 복습</p>
+          </article>
+          <article class="stat-card">
+            <span id="statMastered">0</span>
+            <p>익숙한 말씀</p>
+          </article>
+        </div>
+
+        <section class="panel">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Today's verse</p>
+              <h3>오늘의 암송</h3>
+            </div>
+            <button class="ghost small" data-nav="library" type="button">말씀 목록</button>
+          </div>
+          <div id="todayVerseCard" class="empty-state"></div>
+        </section>
+
+        <section class="panel">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Review</p>
+              <h3>오늘 다시 물 줄 말씀</h3>
+            </div>
+            <button class="ghost small" data-nav="review" type="button">복습하기</button>
+          </div>
+          <div id="dueVerseList" class="verse-list compact"></div>
+        </section>
+      </section>
+
+      <section id="view-memorize" class="view" aria-labelledby="memorizeTitle">
+        <div class="section-heading sticky-heading">
+          <div>
+            <p class="eyebrow">Memorize</p>
+            <h2 id="memorizeTitle">암송하기</h2>
+          </div>
+          <button class="ghost small" data-nav="home" type="button">홈</button>
+        </div>
+
+        <div id="memorizeEmpty" class="panel empty-state"></div>
+        <article id="memorizePanel" class="panel memorize-panel hidden">
+          <div class="verse-meta">
+            <span id="memReference"></span>
+            <span id="memTopic"></span>
+          </div>
+          <div class="progress-line" aria-label="암송 단계 진행률"><span id="stepProgress"></span></div>
+          <p class="stage-label" id="stageLabel"></p>
+          <div class="scripture-box" id="scriptureBox"></div>
+          <textarea id="answerInput" class="answer hidden" rows="5" placeholder="안 보고 떠오르는 말씀을 적어 보세요."></textarea>
+          <div id="compareBox" class="compare-box hidden"></div>
+          <div class="button-row">
+            <button class="secondary" id="prevStepBtn" type="button">이전</button>
+            <button id="nextStepBtn" type="button">다음</button>
+          </div>
+          <div class="button-row hidden" id="resultButtons">
+            <button class="secondary" id="needPracticeBtn" type="button">조금 더 연습</button>
+            <button id="rememberedBtn" type="button">외웠어요</button>
+          </div>
+        </article>
+      </section>
+
+      <section id="view-review" class="view" aria-labelledby="reviewTitle">
+        <div class="section-heading sticky-heading">
+          <div>
+            <p class="eyebrow">Spaced review</p>
+            <h2 id="reviewTitle">복습하기</h2>
+          </div>
+          <button class="ghost small" data-nav="home" type="button">홈</button>
+        </div>
+        <section class="panel">
+          <p class="muted">암송한 말씀은 1일, 3일, 7일, 14일, 30일 뒤 다시 찾아옵니다. 잊힌 말씀도 책망이 아니라 다시 심을 씨앗입니다.</p>
+          <div id="reviewList" class="verse-list"></div>
+        </section>
+      </section>
+
+      <section id="view-library" class="view" aria-labelledby="libraryTitle">
+        <div class="section-heading sticky-heading">
+          <div>
+            <p class="eyebrow">Library</p>
+            <h2 id="libraryTitle">말씀 목록</h2>
+          </div>
+          <button class="ghost small" id="addVerseBtn" type="button">말씀 추가</button>
+        </div>
+        <section class="panel tools-panel">
+          <input id="searchInput" type="search" placeholder="본문, 구절, 주제 검색" />
+          <select id="topicFilter" aria-label="주제 필터">
+            <option value="">전체 주제</option>
+          </select>
+        </section>
+        <section class="panel">
+          <div id="libraryList" class="verse-list"></div>
+        </section>
+      </section>
+
+
+      <section id="view-ranking" class="view" aria-labelledby="rankingTitle">
+        <div class="section-heading sticky-heading">
+          <div>
+            <p class="eyebrow">Weekly ranking</p>
+            <h2 id="rankingTitle">주간 암송 순위</h2>
+          </div>
+          <button class="ghost small" data-nav="home" type="button">홈</button>
+        </div>
+        <section class="panel">
+          <div class="section-heading compact-heading">
+            <div>
+              <p class="eyebrow">This week</p>
+              <h3>이번 주 말씀 열매</h3>
+            </div>
+            <span id="rankingPeriod" class="badge">이번 주</span>
+          </div>
+          <p class="muted">이번 주 월요일부터 오늘까지의 암송·복습 성공 기록을 모았습니다. 순위는 격려의 도구로만 사용해 주세요. 말씀은 경쟁의 트로피보다 마음밭의 열매에 더 가깝습니다.</p>
+          <div class="ranking-summary" id="rankingSummary"></div>
+        </section>
+        <section class="panel tools-panel ranking-tools">
+          <select id="rankingDeptFilter" aria-label="부서별 순위 필터">
+            <option value="">전체 부서</option>
+          </select>
+          <select id="rankingRoleFilter" aria-label="구분별 순위 필터">
+            <option value="student">학생만</option>
+            <option value="teacher">교사만</option>
+            <option value="minister">교역자만</option>
+            <option value="admin">관리자만</option>
+            <option value="all">전체</option>
+          </select>
+        </section>
+        <section class="panel">
+          <div id="rankingList" class="ranking-list"></div>
+        </section>
+      </section>
+
+      <section id="view-admin" class="view" aria-labelledby="adminTitle">
+        <div class="section-heading sticky-heading">
+          <div>
+            <p class="eyebrow">Teacher board</p>
+            <h2 id="adminTitle">교사/관리</h2>
+          </div>
+          <button class="ghost small" data-nav="home" type="button">홈</button>
+        </div>
+        <section class="panel">
+          <h3>진행 현황</h3>
+          <div id="adminStats" class="admin-stats"></div>
+        </section>
+        <section class="panel">
+          <h3>등록 계정</h3>
+          <p class="muted">이 기기에 만든 학생/교사/교역자/관리자 계정입니다. 계정별로 암송 진도가 따로 저장됩니다.</p>
+          <div id="accountList" class="account-list"></div>
+        </section>
+        <section class="panel" id="adminTextPanel"></section>
+        <section class="panel" id="adminDesignPanel"></section>
+        <section class="panel" id="serverSyncPanel"></section>
+        <section class="panel">
+          <h3>데이터 백업</h3>
+          <p class="muted">현재 기기에 저장된 말씀과 진도 데이터를 JSON 파일로 보관하거나 다른 기기에 옮길 수 있습니다. 가져오기와 초기화는 관리자 계정에서만 가능합니다.</p>
+          <div class="button-row wrap">
+            <button id="exportBtn" type="button">내보내기</button>
+            <label class="file-label">
+              가져오기
+              <input id="importInput" type="file" accept="application/json" />
+            </label>
+            <button class="danger ghost" id="resetBtn" type="button">초기화</button>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <nav class="bottom-nav" aria-label="하단 메뉴">
+      <button data-nav="home" class="active" type="button">홈</button>
+      <button data-nav="memorize" type="button">암송</button>
+      <button data-nav="review" type="button">복습</button>
+      <button data-nav="library" type="button">목록</button>
+      <button data-nav="ranking" type="button">순위</button>
+      <button data-nav="admin" type="button">관리</button>
+    </nav>
+  </div>
+
+  <dialog id="verseDialog" class="dialog">
+    <form id="verseForm" method="dialog">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">New seed</p>
+          <h2 id="dialogTitle">말씀 추가</h2>
+        </div>
+        <button class="ghost small" value="cancel" type="button" id="closeVerseDialog">닫기</button>
+      </div>
+      <input type="hidden" id="verseId" />
+      <div class="two-col">
+        <label>암송 번호
+          <input id="numberInput" inputmode="numeric" placeholder="예: 1" />
+        </label>
+        <label>성경 구절
+          <input id="referenceInput" required placeholder="예: 요한복음 3장 16절" />
+        </label>
+      </div>
+      <label>본문
+        <textarea id="textInput" required rows="6" placeholder="암송할 본문을 직접 입력하세요. 번역본 사용 허락을 확인해 주세요."></textarea>
+      </label>
+      <div class="two-col">
+        <label>주제
+          <input id="topicInput" placeholder="예: 구원, 기도, 믿음" />
+        </label>
+        <label>번역본/출처
+          <input id="versionInput" placeholder="예: 개역한글, 직접 입력" />
+        </label>
+      </div>
+      <label class="checkbox-line">
+        <input id="todayInput" type="checkbox" />
+        오늘의 암송으로 지정하기
+      </label>
+      <div class="button-row">
+        <button class="secondary" type="button" id="sampleBtn">샘플 양식 넣기</button>
+        <button type="submit">저장</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="settingsDialog" class="dialog">
+    <form method="dialog">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Account</p>
+          <h2>사용자 계정</h2>
+        </div>
+        <button class="ghost small" value="cancel" type="button" id="closeSettingsDialog">닫기</button>
+      </div>
+      <p class="muted">이름, 부서, 구분을 등록해 두면 계정별로 암송 진도를 따로 저장할 수 있습니다.</p>
+
+      <section class="install-box" aria-labelledby="installTitle">
+        <div>
+          <p class="eyebrow">Mobile</p>
+          <h3 id="installTitle">핸드폰에 설치하기</h3>
+          <p class="muted" id="installGuideText">웹 주소로 접속하면 홈 화면에 앱처럼 추가할 수 있습니다.</p>
+        </div>
+        <button class="secondary small" id="installAppBtn" type="button">설치 안내</button>
+      </section>
+      <label>계정 선택
+        <select id="accountSelect" aria-label="계정 선택">
+          <option value="">새 계정 만들기</option>
+        </select>
+      </label>
+      <div class="two-col">
+        <label>이름
+          <input id="accountNameInput" placeholder="예: 김로의" />
+        </label>
+        <label>부서
+          <input id="departmentInput" placeholder="예: 유년부 1반, 초등부" />
+        </label>
+      </div>
+      <label>구분
+        <select id="accountRoleInput">
+          <option value="student">학생</option>
+          <option value="teacher">교사</option>
+          <option value="minister">교역자</option>
+          <option value="admin">관리자</option>
+        </select>
+      </label>
+      <div id="adminPasswordBox" class="admin-password-box hidden">
+        <label>관리자 비밀번호
+          <input id="adminPasswordInput" type="password" inputmode="numeric" autocomplete="current-password" placeholder="관리자 계정은 비밀번호가 필요합니다" />
+        </label>
+        <p id="adminPasswordHint" class="muted">관리자 계정으로 사용할 때만 입력해 주세요.</p>
+      </div>
+      <div class="button-row wrap">
+        <button id="newAccountBtn" class="secondary" type="button">새 계정 입력</button>
+        <button id="deleteAccountBtn" class="danger ghost" type="button">선택 계정 삭제</button>
+        <button id="saveSettingsBtn" type="button">저장하고 사용하기</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="app.js"></script>
+</body>
+</html>
