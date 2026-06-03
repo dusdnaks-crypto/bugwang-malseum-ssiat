@@ -102,7 +102,22 @@ function defaultAppText() {
     heroEyebrow: "오늘 마음에 심을 말씀",
     heroTitle: "부광의 다음세대 마음밭에 말씀을",
     heroSubtext: "{{name}}님, 오늘도 말씀 한 알을 마음밭에 심어 보세요.",
-    guestSubtext: "계정을 만들고, 오늘 외우고, 내일 다시 기억하고, 삶 속에 새겨 보세요."
+    guestSubtext: "계정을 만들고, 오늘 외우고, 내일 다시 기억하고, 삶 속에 새겨 보세요.",
+    heroIcon: "🌱",
+    memorizePrompt: "말씀을 덮고, 기억나는 만큼 적어 보세요.",
+    nextStepButton: "다음",
+    scoreButton: "채점 보기",
+    needPracticeButton: "조금 더 연습",
+    rememberedButton: "외웠어요",
+    scoreTitle: "기억 유사도 {{score}}%",
+    scoreHelp: "빨간 글자는 내가 적은 답과 달라서 다시 살펴볼 부분입니다.",
+    correctionLabel: "정답 기준 정정 보기",
+    userAnswerLabel: "내가 적은 답",
+    emptyAnswerText: "아직 입력한 답이 없습니다.",
+    needPracticeToast: "괜찮습니다. 내일 다시 물을 줍니다.",
+    needPracticeIcon: "🌱",
+    successToast: "복습 일정을 다시 심어 두었습니다.",
+    successIcon: "🎉"
   };
 }
 
@@ -428,13 +443,21 @@ function requireAdmin(message = "관리자 계정으로 로그인해야 사용�
 }
 
 function formatAppText(template = "", account = currentAccount()) {
-  const name = account?.name || "말씀씨앗";
-  const department = account?.department || "부광교회";
-  const role = roleLabel(account?.role || "student");
-  return template
-    .replaceAll("{{name}}", name)
-    .replaceAll("{{department}}", department)
-    .replaceAll("{{role}}", role);
+  return formatTextTemplate(template, {
+    name: account?.name || "말씀씨앗",
+    department: account?.department || "부광교회",
+    role: roleLabel(account?.role || "student")
+  });
+}
+
+function formatTextTemplate(template = "", values = {}) {
+  return Object.entries(values).reduce((result, [key, value]) => {
+    return result.replaceAll(`{{${key}}}`, value ?? "");
+  }, String(template || ""));
+}
+
+function appTextValue(key) {
+  return ({ ...defaultAppText(), ...(state.appText || {}) })[key];
 }
 
 
@@ -470,6 +493,8 @@ function renderAppText() {
       ? formatAppText(text.heroSubtext, account)
       : formatAppText(text.guestSubtext, account);
   }
+  const seedBadge = document.querySelector(".seed-badge");
+  if (seedBadge) seedBadge.textContent = text.heroIcon || defaultAppText().heroIcon;
 }
 
 function getProgressMap(accountId = state.activeAccountId) {
@@ -570,6 +595,75 @@ function makeBlanked(text, ratio) {
   }).join("");
 }
 
+function resetMemorizeAnswer() {
+  if ($("answerInput")) $("answerInput").value = "";
+  if ($("compareBox")) {
+    $("compareBox").innerHTML = "";
+    $("compareBox").classList.add("hidden");
+  }
+}
+
+function makeCorrectionHtml(userAnswer = "", correctAnswer = "") {
+  const userChars = Array.from(String(userAnswer));
+  const correctChars = Array.from(String(correctAnswer));
+
+  if (!correctChars.length) return "";
+
+  const dp = Array.from({ length: userChars.length + 1 }, () => Array(correctChars.length + 1).fill(0));
+  for (let i = userChars.length - 1; i >= 0; i -= 1) {
+    for (let j = correctChars.length - 1; j >= 0; j -= 1) {
+      dp[i][j] = userChars[i] === correctChars[j]
+        ? dp[i + 1][j + 1] + 1
+        : Math.max(dp[i + 1][j], dp[i][j + 1]);
+    }
+  }
+
+  const matchedCorrectIndexes = new Set();
+  let i = 0;
+  let j = 0;
+  while (i < userChars.length && j < correctChars.length) {
+    if (userChars[i] === correctChars[j]) {
+      matchedCorrectIndexes.add(j);
+      i += 1;
+      j += 1;
+    } else if (dp[i + 1][j] >= dp[i][j + 1]) {
+      i += 1;
+    } else {
+      j += 1;
+    }
+  }
+
+  return correctChars.map((char, index) => {
+    const safe = escapeHtml(char);
+    if (matchedCorrectIndexes.has(index)) return safe;
+    if (/\s/.test(char)) return `<span class="correction-red correction-space">${safe}</span>`;
+    return `<span class="correction-red">${safe}</span>`;
+  }).join("");
+}
+
+function renderScoreComparison(userAnswer, correctAnswer, score) {
+  const title = formatTextTemplate(appTextValue("scoreTitle"), { score });
+  const correctionLabel = appTextValue("correctionLabel");
+  const userAnswerLabel = appTextValue("userAnswerLabel");
+  const emptyAnswerText = appTextValue("emptyAnswerText");
+  const userText = String(userAnswer || "").trim() ? escapeHtml(userAnswer) : `<span class="muted">${escapeHtml(emptyAnswerText)}</span>`;
+
+  return `
+    <div class="score-header">
+      <strong>${escapeHtml(title)}</strong>
+    </div>
+    <p class="score-help">${escapeHtml(appTextValue("scoreHelp"))}</p>
+    <div class="correction-block">
+      <p class="correction-label">${escapeHtml(correctionLabel)}</p>
+      <div class="correction-text">${makeCorrectionHtml(userAnswer, correctAnswer)}</div>
+    </div>
+    <details class="user-answer-detail">
+      <summary>${escapeHtml(userAnswerLabel)}</summary>
+      <div class="user-answer-text">${userText}</div>
+    </details>
+  `;
+}
+
 function renderVerseCard(verse, options = {}) {
   const p = getProgress(verse.id);
   const number = verseNumberText(verse);
@@ -668,6 +762,7 @@ function renderMemorize() {
   panel.classList.remove("hidden");
   selectedVerseId = verse.id;
 
+  const text = { ...defaultAppText(), ...(state.appText || {}) };
   const labels = ["1단계 · 천천히 읽기", "2단계 · 몇 단어 가리고 기억하기", "3단계 · 더 많이 가리고 말하기", "4단계 · 안 보고 적어보기"];
   $("memReference").textContent = verseDisplayReference(verse);
   $("memTopic").textContent = verse.topic || "주제 없음";
@@ -676,13 +771,15 @@ function renderMemorize() {
   $("answerInput").classList.toggle("hidden", memStep !== 3);
   $("compareBox").classList.add("hidden");
   $("resultButtons").classList.toggle("hidden", memStep !== 3);
-  $("nextStepBtn").textContent = memStep === 3 ? "채점 보기" : "다음";
+  $("nextStepBtn").textContent = memStep === 3 ? text.scoreButton : text.nextStepButton;
+  $("needPracticeBtn").textContent = text.needPracticeButton;
+  $("rememberedBtn").textContent = text.rememberedButton;
   $("prevStepBtn").disabled = memStep === 0;
 
   if (memStep === 0) $("scriptureBox").innerHTML = escapeHtml(verse.text);
   if (memStep === 1) $("scriptureBox").innerHTML = makeBlanked(verse.text, 0.28);
   if (memStep === 2) $("scriptureBox").innerHTML = makeBlanked(verse.text, 0.55);
-  if (memStep === 3) $("scriptureBox").innerHTML = "말씀을 덮고, 기억나는 만큼 적어 보세요.";
+  if (memStep === 3) $("scriptureBox").innerHTML = escapeHtml(text.memorizePrompt);
 }
 
 function renderReview() {
@@ -875,7 +972,7 @@ function renderAdminTextSettings() {
   if (!isAdmin()) {
     panel.innerHTML = `
       <h3>관리자 설정</h3>
-      <p class="muted">앱 상단 문구 변경은 관리자 계정에서만 할 수 있습니다. 상단의 계정 버튼에서 <strong>관리자</strong> 계정으로 전환해 주세요.</p>
+      <p class="muted">앱 문구와 아이콘 변경은 관리자 계정에서만 할 수 있습니다. 상단의 계정 버튼에서 <strong>관리자</strong> 계정으로 전환해 주세요.</p>
     `;
     return;
   }
@@ -885,11 +982,11 @@ function renderAdminTextSettings() {
     <div class="section-heading compact-heading">
       <div>
         <p class="eyebrow">Admin text</p>
-        <h3>앱 상단 문구 변경</h3>
+        <h3>앱 문구·아이콘 변경</h3>
       </div>
       <span class="badge">관리자 전용</span>
     </div>
-    <p class="muted">홈 화면 위쪽에 보이는 이름과 안내 문구를 바꿀 수 있습니다. 안내 문구에는 <code>{{name}}</code>, <code>{{department}}</code>, <code>{{role}}</code>을 넣어 계정 정보가 자동으로 들어가게 할 수 있습니다.</p>
+    <p class="muted">홈 화면, 암송 화면, 채점 화면, 결과 알림에 나오는 문구와 아이콘을 바꿀 수 있습니다. 안내 문구에는 <code>{{name}}</code>, <code>{{department}}</code>, <code>{{role}}</code>을 넣어 계정 정보가 자동으로 들어가게 할 수 있고, 점수 문구에는 <code>{{score}}</code>를 사용할 수 있습니다.</p>
     <div class="admin-text-grid">
       <label>상단 작은 문구
         <input id="textTopEyebrow" value="${escapeHtml(text.topEyebrow)}" placeholder="예: 부광교회 교회학교" />
@@ -900,18 +997,63 @@ function renderAdminTextSettings() {
       <label>홈 작은 문구
         <input id="textHeroEyebrow" value="${escapeHtml(text.heroEyebrow)}" placeholder="예: 오늘 마음에 심을 말씀" />
       </label>
-      <label>홈 큰 문구
+      <label>홈 아이콘
+        <input id="textHeroIcon" value="${escapeHtml(text.heroIcon)}" placeholder="예: 🌱" />
+      </label>
+      <label class="full-width">홈 큰 문구
         <input id="textHeroTitle" value="${escapeHtml(text.heroTitle)}" placeholder="예: 부광의 다음세대 마음밭에 말씀을" />
       </label>
-      <label>계정 사용 중 안내 문구
+      <label class="full-width">계정 사용 중 안내 문구
         <textarea id="textHeroSubtext" rows="3" placeholder="예: {{name}}님, 오늘도 말씀 한 알을 마음밭에 심어 보세요.">${escapeHtml(text.heroSubtext)}</textarea>
       </label>
-      <label>계정 없을 때 안내 문구
+      <label class="full-width">계정 없을 때 안내 문구
         <textarea id="textGuestSubtext" rows="3" placeholder="예: 계정을 만들고 말씀을 심어 보세요.">${escapeHtml(text.guestSubtext)}</textarea>
+      </label>
+      <label class="full-width">4단계 암송 안내 문구
+        <textarea id="textMemorizePrompt" rows="2" placeholder="예: 말씀을 덮고 기억나는 만큼 적어 보세요.">${escapeHtml(text.memorizePrompt)}</textarea>
+      </label>
+      <label>다음 단계 버튼
+        <input id="textNextStepButton" value="${escapeHtml(text.nextStepButton)}" placeholder="예: 다음" />
+      </label>
+      <label>채점 버튼
+        <input id="textScoreButton" value="${escapeHtml(text.scoreButton)}" placeholder="예: 채점 보기" />
+      </label>
+      <label>연습 버튼
+        <input id="textNeedPracticeButton" value="${escapeHtml(text.needPracticeButton)}" placeholder="예: 조금 더 연습" />
+      </label>
+      <label>성공 버튼
+        <input id="textRememberedButton" value="${escapeHtml(text.rememberedButton)}" placeholder="예: 외웠어요" />
+      </label>
+      <label>연습 알림 아이콘
+        <input id="textNeedPracticeIcon" value="${escapeHtml(text.needPracticeIcon)}" placeholder="예: 🌱" />
+      </label>
+      <label>성공 알림 아이콘
+        <input id="textSuccessIcon" value="${escapeHtml(text.successIcon)}" placeholder="예: 🎉" />
+      </label>
+      <label class="full-width">연습 알림 문구
+        <textarea id="textNeedPracticeToast" rows="2" placeholder="예: 괜찮습니다. 내일 다시 물을 줍니다.">${escapeHtml(text.needPracticeToast)}</textarea>
+      </label>
+      <label class="full-width">성공 알림 문구
+        <textarea id="textSuccessToast" rows="2" placeholder="예: 복습 일정을 다시 심어 두었습니다.">${escapeHtml(text.successToast)}</textarea>
+      </label>
+      <label>점수 제목
+        <input id="textScoreTitle" value="${escapeHtml(text.scoreTitle)}" placeholder="예: 기억 유사도 {{score}}%" />
+      </label>
+      <label>정정 보기 제목
+        <input id="textCorrectionLabel" value="${escapeHtml(text.correctionLabel)}" placeholder="예: 정답 기준 정정 보기" />
+      </label>
+      <label>내 답 보기 제목
+        <input id="textUserAnswerLabel" value="${escapeHtml(text.userAnswerLabel)}" placeholder="예: 내가 적은 답" />
+      </label>
+      <label>빈 답안 문구
+        <input id="textEmptyAnswerText" value="${escapeHtml(text.emptyAnswerText)}" placeholder="예: 아직 입력한 답이 없습니다." />
+      </label>
+      <label class="full-width">채점 안내 문구
+        <textarea id="textScoreHelp" rows="2" placeholder="예: 빨간 글자는 다시 살펴볼 부분입니다.">${escapeHtml(text.scoreHelp)}</textarea>
       </label>
     </div>
     <div class="button-row wrap">
-      <button id="saveAppTextBtn" type="button">문구 저장</button>
+      <button id="saveAppTextBtn" type="button">문구·아이콘 저장</button>
       <button class="secondary" id="resetAppTextBtn" type="button">기본 문구로 되돌리기</button>
     </div>
   `;
@@ -922,17 +1064,33 @@ function saveAppTextSettings() {
     alert("관리자 계정에서만 문구를 변경할 수 있습니다.");
     return;
   }
+  const defaults = defaultAppText();
   state.appText = {
-    topEyebrow: $("textTopEyebrow")?.value.trim() || defaultAppText().topEyebrow,
-    appTitle: $("textAppTitle")?.value.trim() || defaultAppText().appTitle,
-    heroEyebrow: $("textHeroEyebrow")?.value.trim() || defaultAppText().heroEyebrow,
-    heroTitle: $("textHeroTitle")?.value.trim() || defaultAppText().heroTitle,
-    heroSubtext: $("textHeroSubtext")?.value.trim() || defaultAppText().heroSubtext,
-    guestSubtext: $("textGuestSubtext")?.value.trim() || defaultAppText().guestSubtext
+    topEyebrow: $("textTopEyebrow")?.value.trim() || defaults.topEyebrow,
+    appTitle: $("textAppTitle")?.value.trim() || defaults.appTitle,
+    heroEyebrow: $("textHeroEyebrow")?.value.trim() || defaults.heroEyebrow,
+    heroTitle: $("textHeroTitle")?.value.trim() || defaults.heroTitle,
+    heroSubtext: $("textHeroSubtext")?.value.trim() || defaults.heroSubtext,
+    guestSubtext: $("textGuestSubtext")?.value.trim() || defaults.guestSubtext,
+    heroIcon: $("textHeroIcon")?.value.trim() || defaults.heroIcon,
+    memorizePrompt: $("textMemorizePrompt")?.value.trim() || defaults.memorizePrompt,
+    nextStepButton: $("textNextStepButton")?.value.trim() || defaults.nextStepButton,
+    scoreButton: $("textScoreButton")?.value.trim() || defaults.scoreButton,
+    needPracticeButton: $("textNeedPracticeButton")?.value.trim() || defaults.needPracticeButton,
+    rememberedButton: $("textRememberedButton")?.value.trim() || defaults.rememberedButton,
+    scoreTitle: $("textScoreTitle")?.value.trim() || defaults.scoreTitle,
+    scoreHelp: $("textScoreHelp")?.value.trim() || defaults.scoreHelp,
+    correctionLabel: $("textCorrectionLabel")?.value.trim() || defaults.correctionLabel,
+    userAnswerLabel: $("textUserAnswerLabel")?.value.trim() || defaults.userAnswerLabel,
+    emptyAnswerText: $("textEmptyAnswerText")?.value.trim() || defaults.emptyAnswerText,
+    needPracticeToast: $("textNeedPracticeToast")?.value.trim() || defaults.needPracticeToast,
+    needPracticeIcon: $("textNeedPracticeIcon")?.value.trim() || defaults.needPracticeIcon,
+    successToast: $("textSuccessToast")?.value.trim() || defaults.successToast,
+    successIcon: $("textSuccessIcon")?.value.trim() || defaults.successIcon
   };
   state.appName = state.appText.appTitle;
   saveState();
-  showToast("앱 문구를 저장했습니다.");
+  showToast("앱 문구와 아이콘을 저장했습니다.");
 }
 
 function resetAppTextSettings() {
@@ -1067,8 +1225,14 @@ function render() {
 
 function navigate(view, verseId = null) {
   currentView = view;
+  const previousVerseId = selectedVerseId;
   if (verseId) selectedVerseId = verseId;
-  if (view === "memorize") memStep = 0;
+  if (view === "memorize") {
+    memStep = 0;
+    resetMemorizeAnswer();
+  } else if (previousVerseId !== selectedVerseId) {
+    resetMemorizeAnswer();
+  }
   window.scrollTo({ top: 0, behavior: "smooth" });
   render();
 }
@@ -1235,7 +1399,10 @@ function practiceResult(verseId, success) {
   p.lastPracticed = t;
   state.history.push({ verseId, accountId: state.activeAccountId, success, date: t, at: new Date().toISOString() });
   saveState();
-  showToast(success ? "복습 일정을 다시 심어 두었습니다." : "괜찮습니다. 내일 다시 물을 줍니다.");
+  const message = success
+    ? `${appTextValue("successIcon")} ${appTextValue("successToast")}`.trim()
+    : `${appTextValue("needPracticeIcon")} ${appTextValue("needPracticeToast")}`.trim();
+  showToast(message);
 }
 
 function handleVerseAction(target) {
@@ -1365,9 +1532,10 @@ function setupEvents() {
       renderMemorize();
       return;
     }
-    const score = Math.round(similarity($("answerInput").value, verse.text) * 100);
+    const answer = $("answerInput").value;
+    const score = Math.round(similarity(answer, verse.text) * 100);
     $("compareBox").classList.remove("hidden");
-    $("compareBox").innerHTML = `<strong>기억 유사도 ${score}%</strong><br>정답 본문을 다시 확인하고 스스로 판단해 주세요.<br><br>${escapeHtml(verse.text)}`;
+    $("compareBox").innerHTML = renderScoreComparison(answer, verse.text, score);
   });
   $("rememberedBtn").addEventListener("click", () => {
     if (selectedVerseId) practiceResult(selectedVerseId, true);

@@ -1,0 +1,12 @@
+부광 말씀씨앗 서버 동기화 버전 안내
+
+1. 압축을 풉니다.
+2. Supabase를 쓰려면 supabase_schema.sql을 SQL Editor에서 실행합니다.
+3. config.js에 Supabase URL과 anon key를 입력하고 mode를 "supabase"로 바꿉니다.
+4. bugwang-malseum-ssiat-app 폴더 전체를 Netlify 또는 GitHub Pages 같은 곳에 올립니다.
+5. 생성된 웹 주소를 휴대폰에서 엽니다.
+6. 안드로이드는 Chrome 메뉴에서 ‘앱 설치’ 또는 ‘홈 화면에 추가’를 선택합니다.
+7. 아이폰은 Safari 공유 버튼에서 ‘홈 화면에 추가’를 선택합니다.
+
+관리자 계정 비밀번호는 1369입니다.
+서버 설정을 하지 않으면 기존처럼 각 기기에만 저장되는 로컬 모드로 작동합니다.

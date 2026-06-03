@@ -1,4 +1,4 @@
-const CACHE_NAME = "bugwang-malseum-ssiat-v10-server-sync";
+const CACHE_NAME = "bugwang-malseum-ssiat-v11-custom-feedback";
 const ASSETS = [
   "./",
   "./index.html",
