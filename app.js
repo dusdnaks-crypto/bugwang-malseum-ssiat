@@ -116,7 +116,7 @@ function defaultAppText() {
     emptyAnswerText: "아직 입력한 답이 없습니다.",
     needPracticeToast: "괜찮습니다. 내일 다시 물을 줍니다.",
     needPracticeIcon: "🌱",
-    successToast: "복습 일정을 다시 심어 두었습니다.",
+    successToast: "오탈자 없이 암송했어요! 내가 암송한 말씀에 저장했습니다.",
     successIcon: "🎉"
   };
 }
@@ -410,6 +410,12 @@ function similarity(a, b) {
   return 1 - dp[s.length][t.length] / Math.max(s.length, t.length);
 }
 
+function isPerfectAnswer(userAnswer, correctAnswer) {
+  const user = normalize(userAnswer);
+  const correct = normalize(correctAnswer);
+  return Boolean(correct) && user === correct;
+}
+
 function currentAccount() {
   return state.accounts.find(account => account.id === state.activeAccountId) || null;
 }
@@ -513,14 +519,20 @@ function emptyProgress() {
     successCount: 0,
     failCount: 0,
     lastPracticed: null,
-    nextReview: today(),
-    mastered: false
+    // 아직 한 번도 외운 적이 없는 말씀은 복습 목록에 올리지 않습니다.
+    // 학생이 암송 화면에서 오탈자 없이 "외웠어요"를 눌러 완전 암송 기록이 생긴 뒤부터 복습 일정이 시작됩니다.
+    nextReview: null,
+    mastered: false,
+    perfectCount: 0,
+    lastPerfectDate: null,
+    lastPerfectAt: null
   };
 }
 
 function getProgress(verseId, accountId = state.activeAccountId) {
   const map = getProgressMap(accountId);
   if (!map[verseId]) map[verseId] = emptyProgress();
+  else map[verseId] = { ...emptyProgress(), ...map[verseId] };
   return map[verseId];
 }
 
@@ -528,7 +540,9 @@ function dueVerses(accountId = state.activeAccountId) {
   const t = today();
   return orderedVerses().filter(v => {
     const p = getProgress(v.id, accountId);
-    return p.nextReview && p.nextReview <= t;
+    // 복습 탭에는 한 번이라도 오탈자 없이 암송한 말씀만 보여줍니다.
+    // 새로 등록된 말씀이나 "조금 더 연습"만 누른 말씀은 복습 대상에서 제외됩니다.
+    return (p.perfectCount || 0) > 0 && p.nextReview && p.nextReview <= t;
   });
 }
 
@@ -653,6 +667,7 @@ function renderScoreComparison(userAnswer, correctAnswer, score) {
       <strong>${escapeHtml(title)}</strong>
     </div>
     <p class="score-help">${escapeHtml(appTextValue("scoreHelp"))}</p>
+    ${isPerfectAnswer(userAnswer, correctAnswer) ? `<p class="perfect-help">오탈자 없이 암송했습니다. ‘외웠어요’를 누르면 내가 암송한 말씀에 저장됩니다.</p>` : `<p class="score-help">정정된 빨간 글자가 남아 있으면 ‘내가 암송한 말씀’에는 저장되지 않습니다.</p>`}
     <div class="correction-block">
       <p class="correction-label">${escapeHtml(correctionLabel)}</p>
       <div class="correction-text">${makeCorrectionHtml(userAnswer, correctAnswer)}</div>
@@ -670,6 +685,7 @@ function renderVerseCard(verse, options = {}) {
   const numberBadge = number ? `<span class="verse-number">${escapeHtml(number)}</span>` : "";
   const topic = verse.topic ? `<span class="badge">${escapeHtml(verse.topic)}</span>` : "";
   const mastered = p.mastered ? `<span class="badge gold">익숙한 말씀</span>` : "";
+  const perfectlyMemorized = (p.perfectCount || 0) > 0 ? `<span class="badge gold">암송 완료</span>` : "";
   const version = verse.version ? `<span class="badge">${escapeHtml(verse.version)}</span>` : "";
   const preview = options.full ? verse.text : (verse.text.length > 120 ? `${verse.text.slice(0, 120)}…` : verse.text);
   const adminActions = isAdmin() ? `
@@ -678,12 +694,11 @@ function renderVerseCard(verse, options = {}) {
   return `
     <article class="verse-card">
       <h4>${numberBadge}<span>${escapeHtml(verse.reference)}</span></h4>
-      <div>${topic} ${version} ${mastered}</div>
+      <div>${topic} ${version} ${mastered} ${perfectlyMemorized}</div>
       <blockquote>${escapeHtml(preview)}</blockquote>
-      <p class="muted">다음 복습: ${p.nextReview || "오늘"} · 성공 ${p.successCount}회 · 연습 ${p.failCount}회</p>
+      <p class="muted">다음 복습: ${(p.perfectCount || 0) > 0 ? (p.nextReview || "예정 없음") : "암송 시작 전"} · 성공 ${p.successCount}회 · 연습 ${p.failCount}회</p>
       <div class="verse-actions">
         <button class="small" data-action="memorize" data-id="${verse.id}" type="button">암송</button>
-        <button class="small secondary" data-action="reviewSuccess" data-id="${verse.id}" type="button">복습 완료</button>
         ${adminActions}
       </div>
     </article>
@@ -816,11 +831,76 @@ function renderLibrary() {
     : `<div class="empty-state">${isAdmin() ? "보이는 말씀이 없습니다. 검색어를 줄이거나 새 말씀을 추가해 보세요." : "보이는 말씀이 없습니다. 새 말씀 추가는 관리자 계정에서만 가능합니다."}</div>`;
 }
 
+function memorizedVersesForAccount(accountId = state.activeAccountId) {
+  const map = getProgressMap(accountId);
+  return orderedVerses()
+    .filter(verse => (map[verse.id]?.perfectCount || 0) > 0)
+    .sort((a, b) => {
+      const ap = map[a.id] || {};
+      const bp = map[b.id] || {};
+      return String(bp.lastPerfectAt || "").localeCompare(String(ap.lastPerfectAt || ""));
+    });
+}
+
+function renderMemorizedVerseCard(verse) {
+  const p = getProgress(verse.id);
+  const number = verseNumberText(verse);
+  const numberBadge = number ? `<span class="verse-number">${escapeHtml(number)}</span>` : "";
+  const topic = verse.topic ? `<span class="badge">${escapeHtml(verse.topic)}</span>` : "";
+  const version = verse.version ? `<span class="badge">${escapeHtml(verse.version)}</span>` : "";
+  const completedDate = p.lastPerfectDate || "기록됨";
+  return `
+    <article class="verse-card memorized-card">
+      <h4>${numberBadge}<span>${escapeHtml(verse.reference)}</span></h4>
+      <div>${topic} ${version} <span class="badge gold">암송 완료</span></div>
+      <blockquote>${escapeHtml(verse.text)}</blockquote>
+      <p class="muted">암송 완료일: ${escapeHtml(completedDate)} · 완전 암송 ${p.perfectCount || 1}회 · 다음 복습: ${escapeHtml(p.nextReview || "예정 없음")}</p>
+      <div class="verse-actions">
+        <button class="small" data-action="memorize" data-id="${verse.id}" type="button">다시 암송</button>
+      </div>
+    </article>
+  `;
+}
+
+function renderMyVerses() {
+  const list = $("myVerseList");
+  const summary = $("myVerseSummary");
+  if (!list || !summary) return;
+
+  const account = currentAccount();
+  if (!account) {
+    summary.innerHTML = `<div class="empty-state">계정을 먼저 선택하면 내가 암송한 말씀을 모아 볼 수 있습니다.</div>`;
+    list.innerHTML = "";
+    return;
+  }
+
+  const verses = memorizedVersesForAccount(account.id);
+  const progressValues = Object.values(getProgressMap(account.id));
+  const perfectTotal = progressValues.reduce((sum, p) => sum + (p.perfectCount || 0), 0);
+  const latest = verses[0] ? getProgress(verses[0].id, account.id).lastPerfectDate : "아직 없음";
+
+  summary.innerHTML = `
+    <div class="ranking-summary memorized-summary">
+      <div class="ranking-mini-card"><strong>${verses.length}</strong><span>암송한 말씀</span></div>
+      <div class="ranking-mini-card"><strong>${perfectTotal}</strong><span>완전 암송 횟수</span></div>
+      <div class="ranking-mini-card"><strong>${escapeHtml(latest)}</strong><span>최근 암송</span></div>
+    </div>
+  `;
+
+  if (!verses.length) {
+    list.innerHTML = `<div class="empty-state">아직 오탈자 없이 암송한 말씀이 없습니다. 암송 4단계에서 정답과 완전히 일치하면 이곳에 차곡차곡 저장됩니다.</div>`;
+    return;
+  }
+
+  list.innerHTML = verses.map(verse => renderMemorizedVerseCard(verse)).join("");
+}
+
 function progressSummaryForAccount(accountId) {
   const map = getProgressMap(accountId);
   const values = Object.values(map);
   return {
     mastered: values.filter(p => p.mastered).length,
+    memorized: values.filter(p => (p.perfectCount || 0) > 0).length,
     success: values.reduce((sum, p) => sum + (p.successCount || 0), 0),
     fail: values.reduce((sum, p) => sum + (p.failCount || 0), 0),
     due: dueVerses(accountId).length
@@ -843,6 +923,7 @@ function formatShortDate(dateStr) {
 function successfulHistoryForAccount(accountId, startDate, endDate) {
   return state.history.filter(item =>
     item.success &&
+    item.perfect &&
     item.accountId === accountId &&
     item.date >= startDate &&
     item.date <= endDate
@@ -1202,7 +1283,7 @@ function renderAdmin() {
         <div>
           <strong>${escapeHtml(accountItem.name)}</strong>
           <p>${escapeHtml(accountItem.department || "부서 미입력")} · ${roleLabel(accountItem.role)}${adminStatus}</p>
-          <p class="muted">복습 ${summary.due}개 · 성공 ${summary.success}회 · 익숙한 말씀 ${summary.mastered}개</p>
+          <p class="muted">복습 ${summary.due}개 · 암송 완료 ${summary.memorized}개 · 성공 ${summary.success}회 · 익숙한 말씀 ${summary.mastered}개</p>
         </div>
         <button class="small ghost" data-action="switchAccount" data-id="${accountItem.id}" type="button">사용</button>
       </article>
@@ -1217,6 +1298,7 @@ function render() {
   renderMemorize();
   renderReview();
   renderLibrary();
+  renderMyVerses();
   renderRanking();
   renderAdmin();
   document.querySelectorAll(".bottom-nav button").forEach(btn => btn.classList.toggle("active", btn.dataset.nav === currentView));
@@ -1382,22 +1464,39 @@ function deleteSelectedAccount() {
   showToast("계정을 삭제했습니다.");
 }
 
-function practiceResult(verseId, success) {
+function practiceResult(verseId, success, options = {}) {
   const p = getProgress(verseId);
   const t = today();
+  const at = new Date().toISOString();
+  const perfect = Boolean(options.perfect);
   if (success) {
+    const interval = REVIEW_INTERVALS[Math.min(p.level, REVIEW_INTERVALS.length - 1)];
+    p.nextReview = addDays(t, interval);
     p.level = Math.min(p.level + 1, REVIEW_INTERVALS.length - 1);
     p.successCount += 1;
     p.mastered = p.level >= 4;
-    p.nextReview = addDays(t, REVIEW_INTERVALS[p.level]);
+    if (perfect) {
+      p.perfectCount = (p.perfectCount || 0) + 1;
+      p.lastPerfectDate = t;
+      p.lastPerfectAt = at;
+    }
   } else {
     p.level = Math.max(0, p.level - 1);
     p.failCount += 1;
     p.mastered = false;
-    p.nextReview = addDays(t, 1);
+    // 이미 한 번 이상 외웠던 말씀만 복습 일정에 다시 올립니다.
+    p.nextReview = p.successCount > 0 ? addDays(t, 1) : null;
   }
   p.lastPracticed = t;
-  state.history.push({ verseId, accountId: state.activeAccountId, success, date: t, at: new Date().toISOString() });
+  state.history.push({
+    verseId,
+    accountId: state.activeAccountId,
+    success,
+    perfect,
+    score: Number.isFinite(options.score) ? options.score : null,
+    date: t,
+    at
+  });
   saveState();
   const message = success
     ? `${appTextValue("successIcon")} ${appTextValue("successToast")}`.trim()
@@ -1430,7 +1529,6 @@ function handleVerseAction(target) {
   const verse = state.verses.find(v => v.id === id);
   if (!verse) return;
   if (action === "memorize") navigate("memorize", id);
-  if (action === "reviewSuccess") practiceResult(id, true);
   if (action === "edit") openVerseDialog(verse);
   if (action === "delete") {
     if (!requireAdmin("말씀 삭제는 관리자 계정으로 로그인해야 사용할 수 있습니다.")) return;
@@ -1538,8 +1636,19 @@ function setupEvents() {
     $("compareBox").innerHTML = renderScoreComparison(answer, verse.text, score);
   });
   $("rememberedBtn").addEventListener("click", () => {
-    if (selectedVerseId) practiceResult(selectedVerseId, true);
-    navigate("home");
+    if (!selectedVerseId) return;
+    const verse = state.verses.find(v => v.id === selectedVerseId);
+    if (!verse) return;
+    const answer = $("answerInput").value;
+    const score = Math.round(similarity(answer, verse.text) * 100);
+    if (!isPerfectAnswer(answer, verse.text)) {
+      $("compareBox").classList.remove("hidden");
+      $("compareBox").innerHTML = renderScoreComparison(answer, verse.text, score);
+      showToast("빨간 글자가 남아 있어요. 조금 더 연습해 주세요.");
+      return;
+    }
+    practiceResult(selectedVerseId, true, { perfect: true, score });
+    navigate("myverses");
   });
   $("needPracticeBtn").addEventListener("click", () => {
     if (selectedVerseId) practiceResult(selectedVerseId, false);

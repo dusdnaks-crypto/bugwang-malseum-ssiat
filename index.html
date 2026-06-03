@@ -66,7 +66,7 @@
           <div class="section-heading">
             <div>
               <p class="eyebrow">Today's verse</p>
-              <h3>오늘의 암송</h3>
+              <h3>암송구절</h3>
             </div>
             <button class="ghost small" data-nav="library" type="button">말씀 목록</button>
           </div>
@@ -150,6 +150,24 @@
       </section>
 
 
+
+      <section id="view-myverses" class="view" aria-labelledby="myVersesTitle">
+        <div class="section-heading sticky-heading">
+          <div>
+            <p class="eyebrow">My memorized verses</p>
+            <h2 id="myVersesTitle">내가 암송한 말씀</h2>
+          </div>
+          <button class="ghost small" data-nav="home" type="button">홈</button>
+        </div>
+        <section class="panel">
+          <p class="muted">암송 4단계에서 오탈자 없이 입력한 말씀만 이곳에 저장됩니다. 말씀들이 작은 표식처럼 쌓여, 아이들의 마음밭에 남은 열매를 보여줍니다.</p>
+          <div id="myVerseSummary"></div>
+        </section>
+        <section class="panel">
+          <div id="myVerseList" class="verse-list"></div>
+        </section>
+      </section>
+
       <section id="view-ranking" class="view" aria-labelledby="rankingTitle">
         <div class="section-heading sticky-heading">
           <div>
@@ -225,6 +243,7 @@
       <button data-nav="home" class="active" type="button">홈</button>
       <button data-nav="memorize" type="button">암송</button>
       <button data-nav="review" type="button">복습</button>
+      <button data-nav="myverses" type="button">내말씀</button>
       <button data-nav="library" type="button">목록</button>
       <button data-nav="ranking" type="button">순위</button>
       <button data-nav="admin" type="button">관리</button>
@@ -262,7 +281,7 @@
       </div>
       <label class="checkbox-line">
         <input id="todayInput" type="checkbox" />
-        오늘의 암송으로 지정하기
+        대표 암송구절로 지정하기
       </label>
       <div class="button-row">
         <button class="secondary" type="button" id="sampleBtn">샘플 양식 넣기</button>

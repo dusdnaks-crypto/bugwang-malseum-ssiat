@@ -254,7 +254,7 @@ input:focus, textarea:focus, select:focus { border-color: var(--brand); box-shad
   transform: translateX(-50%);
   width: min(680px, calc(100% - 1.5rem));
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
+  grid-template-columns: repeat(7, 1fr);
   gap: .35rem;
   padding: .4rem;
   background: rgba(255, 253, 248, .93);
@@ -705,4 +705,24 @@ body[data-background="blossom"] {
 .admin-text-grid label.full-width { grid-column: 1 / -1; }
 @media (max-width: 640px) {
   .admin-text-grid label.full-width { grid-column: auto; }
+}
+
+
+/* 내가 암송한 말씀 */
+.memorized-card {
+  border-color: rgba(216, 155, 69, .42);
+  background: linear-gradient(180deg, #fffefb, rgba(216, 155, 69, .07));
+}
+.memorized-summary { margin-top: 1rem; }
+.perfect-help {
+  margin: .55rem 0;
+  padding: .65rem .8rem;
+  border-radius: 14px;
+  background: rgba(216, 155, 69, .16);
+  color: #7a4c10;
+  font-weight: 800;
+  line-height: 1.5;
+}
+@media (max-width: 640px) {
+  .bottom-nav button { font-size: .68rem; padding-left: .08rem; padding-right: .08rem; }
 }
