@@ -741,15 +741,28 @@ function renderHome() {
   $("statMastered").textContent = Object.values(getProgressMap()).filter(p => p.mastered).length;
   renderAccountSummary();
 
-  const todayVerse = activeTodayVerse();
+  const verses = orderedVerses();
   const todayBox = $("todayVerseCard");
-  if (!todayVerse) {
+  if (!verses.length) {
+    todayBox.className = "empty-state";
     todayBox.innerHTML = isAdmin()
       ? `아직 등록된 말씀이 없습니다. <button class="small" data-open-add type="button">첫 말씀 추가하기</button>`
       : `아직 등록된 말씀이 없습니다. 관리자 계정으로 로그인하면 첫 말씀을 추가할 수 있습니다.`;
   } else {
-    todayBox.className = "verse-list";
-    todayBox.innerHTML = renderVerseCard(todayVerse, { full: true });
+    todayBox.className = "verse-carousel";
+    todayBox.innerHTML = `
+      <div class="verse-carousel-hint">옆으로 넘기면 다음 암송구절을 볼 수 있습니다.</div>
+      <div class="verse-carousel-track" aria-label="암송구절 목록">
+        ${verses.map((verse, index) => `
+          <div class="verse-carousel-slide" aria-label="${index + 1}번째 암송구절">
+            ${renderVerseCard(verse, { full: true })}
+          </div>
+        `).join("")}
+      </div>
+      <div class="verse-carousel-footer">
+        ${verses.map((verse, index) => `<span>${index + 1}</span>`).join("")}
+      </div>
+    `;
   }
 
   const due = dueVerses().slice(0, 3);

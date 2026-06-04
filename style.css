@@ -726,3 +726,46 @@ body[data-background="blossom"] {
 @media (max-width: 640px) {
   .bottom-nav button { font-size: .68rem; padding-left: .08rem; padding-right: .08rem; }
 }
+
+/* 홈 화면 암송구절 가로 넘김 */
+.verse-carousel { display: grid; gap: .7rem; }
+.verse-carousel-hint {
+  color: var(--muted);
+  font-size: .88rem;
+  line-height: 1.55;
+}
+.verse-carousel-track {
+  display: flex;
+  gap: .85rem;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  padding: .15rem .15rem .75rem;
+  scrollbar-width: thin;
+}
+.verse-carousel-slide {
+  flex: 0 0 min(100%, 560px);
+  scroll-snap-align: start;
+}
+.verse-carousel-slide .verse-card { height: 100%; }
+.verse-carousel-footer {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: .35rem;
+}
+.verse-carousel-footer span {
+  min-width: 1.55rem;
+  height: 1.55rem;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--brand-soft);
+  color: var(--brand-dark);
+  font-size: .78rem;
+  font-weight: 900;
+}
+@media (max-width: 640px) {
+  .verse-carousel-track { margin-left: -.2rem; margin-right: -.2rem; }
+  .verse-carousel-slide { flex-basis: 92%; }
+}
