@@ -748,6 +748,17 @@ body[data-background="blossom"] {
   scroll-snap-align: start;
 }
 .verse-carousel-slide .verse-card { height: 100%; }
+
+.verse-carousel-controls {
+  display: flex;
+  justify-content: center;
+  gap: .5rem;
+  flex-wrap: wrap;
+}
+.verse-carousel-controls button {
+  min-width: 7.5rem;
+}
+
 .verse-carousel-footer {
   display: flex;
   justify-content: center;

@@ -734,6 +734,26 @@ function renderAccountSummary() {
   `;
 }
 
+
+function scrollHomeVerseCarousel(direction = 1) {
+  const track = document.querySelector("#todayVerseCard .verse-carousel-track");
+  if (!track) return;
+  const slide = track.querySelector(".verse-carousel-slide");
+  const gap = 14;
+  const step = slide ? slide.getBoundingClientRect().width + gap : track.clientWidth;
+  const maxScroll = Math.max(0, track.scrollWidth - track.clientWidth);
+  const current = track.scrollLeft;
+  const nearStart = current <= 8;
+  const nearEnd = current >= maxScroll - 8;
+  let nextLeft = current + step * direction;
+
+  if (direction > 0 && nearEnd) nextLeft = 0;
+  if (direction < 0 && nearStart) nextLeft = maxScroll;
+
+  nextLeft = Math.max(0, Math.min(maxScroll, nextLeft));
+  track.scrollTo({ left: nextLeft, behavior: "smooth" });
+}
+
 function renderHome() {
   renderAppText();
   $("statVerses").textContent = state.verses.length;
@@ -751,13 +771,17 @@ function renderHome() {
   } else {
     todayBox.className = "verse-carousel";
     todayBox.innerHTML = `
-      <div class="verse-carousel-hint">옆으로 넘기면 다음 암송구절을 볼 수 있습니다.</div>
+      <div class="verse-carousel-hint">옆으로 넘기거나 아래 버튼을 누르면 다음 암송구절을 볼 수 있습니다.</div>
       <div class="verse-carousel-track" aria-label="암송구절 목록">
         ${verses.map((verse, index) => `
           <div class="verse-carousel-slide" aria-label="${index + 1}번째 암송구절">
             ${renderVerseCard(verse, { full: true })}
           </div>
         `).join("")}
+      </div>
+      <div class="verse-carousel-controls" aria-label="암송구절 넘기기">
+        <button class="small ghost" data-carousel-dir="-1" type="button">이전 구절</button>
+        <button class="small ghost" data-carousel-dir="1" type="button">다음 구절</button>
       </div>
       <div class="verse-carousel-footer">
         ${verses.map((verse, index) => `<span>${index + 1}</span>`).join("")}
@@ -1558,6 +1582,13 @@ function handleVerseAction(target) {
 
 function setupEvents() {
   document.body.addEventListener("click", (event) => {
+    const carouselButton = event.target.closest("[data-carousel-dir]");
+    if (carouselButton) {
+      event.preventDefault();
+      scrollHomeVerseCarousel(Number(carouselButton.dataset.carouselDir) || 1);
+      return;
+    }
+
     const nav = event.target.closest("[data-nav]");
     if (nav) navigate(nav.dataset.nav);
     const actionButton = event.target.closest("[data-action]");
