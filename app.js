@@ -41,41 +41,50 @@ function isInstallableContext() {
 }
 
 function updateInstallGuide() {
-  const text = $("installGuideText");
-  const btn = $("installAppBtn");
-  if (!text || !btn) return;
+  const texts = [
+    ...document.querySelectorAll("[data-install-guide-text]"),
+    $("installGuideText"),
+    $("homeInstallGuideText")
+  ].filter(Boolean);
+  const buttons = [
+    ...document.querySelectorAll("[data-install-app]"),
+    $("installAppBtn"),
+    $("homeInstallAppBtn")
+  ].filter(Boolean);
+
+  const uniqueTexts = [...new Set(texts)];
+  const uniqueButtons = [...new Set(buttons)];
+  if (!uniqueTexts.length || !uniqueButtons.length) return;
+
+  const apply = (message, buttonText, disabled = false) => {
+    uniqueTexts.forEach(text => { text.textContent = message; });
+    uniqueButtons.forEach(btn => {
+      btn.textContent = buttonText;
+      btn.disabled = disabled;
+    });
+  };
 
   if (isStandaloneMode()) {
-    text.textContent = "이미 홈 화면 앱처럼 실행 중입니다.";
-    btn.textContent = "설치 완료";
-    btn.disabled = true;
+    apply("이미 홈 화면 앱처럼 실행 중입니다.", "설치 완료", true);
     return;
   }
 
   if (location.protocol === "file:") {
-    text.textContent = "다운로드한 파일을 바로 열면 기본 사용은 가능하지만, 홈 화면 설치는 웹 주소로 접속해야 안정적입니다.";
-    btn.textContent = "설치 방법 보기";
-    btn.disabled = false;
+    apply("압축 파일 안의 index.html을 바로 열면 기본 사용은 가능하지만, 홈 화면 설치는 웹 주소로 접속해야 안정적입니다.", "설치 방법 보기");
     return;
   }
 
   if (deferredInstallPrompt) {
-    text.textContent = "이 기기에서는 바로 설치할 수 있습니다. 버튼을 눌러 홈 화면에 추가해 보세요.";
-    btn.textContent = "앱 설치하기";
-    btn.disabled = false;
+    apply("이 기기에서는 바로 설치할 수 있습니다. 버튼을 누르면 홈 화면 앱으로 추가됩니다.", "앱 설치하기");
     return;
   }
 
   if (isIosDevice()) {
-    text.textContent = "아이폰은 Safari 공유 버튼을 누른 뒤 ‘홈 화면에 추가’를 선택하면 됩니다.";
-    btn.textContent = "아이폰 안내";
-    btn.disabled = false;
+    apply("아이폰은 Safari 공유 버튼을 누른 뒤 ‘홈 화면에 추가’를 선택하면 됩니다.", "아이폰 설치 안내");
     return;
   }
 
-  text.textContent = "Chrome 메뉴에서 ‘앱 설치’ 또는 ‘홈 화면에 추가’를 선택하면 됩니다.";
-  btn.textContent = "설치 방법 보기";
-  btn.disabled = false;
+  apply("Chrome 메뉴에서 ‘앱 설치’ 또는 ‘홈 화면에 추가’를 선택하면 됩니다.", "설치 방법 보기");
 }
 
 async function showInstallGuide() {
@@ -771,7 +780,7 @@ function renderHome() {
   } else {
     todayBox.className = "verse-carousel";
     todayBox.innerHTML = `
-      <div class="verse-carousel-hint">옆으로 넘기거나 아래 버튼을 누르면 다음 암송구절을 볼 수 있습니다.</div>
+      <div class="verse-carousel-hint">옆으로 넘기거나 아래 버튼을 누르면 다른 암송구절을 볼 수 있습니다.</div>
       <div class="verse-carousel-track" aria-label="암송구절 목록">
         ${verses.map((verse, index) => `
           <div class="verse-carousel-slide" aria-label="${index + 1}번째 암송구절">
@@ -782,9 +791,6 @@ function renderHome() {
       <div class="verse-carousel-controls" aria-label="암송구절 넘기기">
         <button class="small ghost" data-carousel-dir="-1" type="button">이전 구절</button>
         <button class="small ghost" data-carousel-dir="1" type="button">다음 구절</button>
-      </div>
-      <div class="verse-carousel-footer">
-        ${verses.map((verse, index) => `<span>${index + 1}</span>`).join("")}
       </div>
     `;
   }
@@ -1589,6 +1595,13 @@ function setupEvents() {
       return;
     }
 
+    const installButton = event.target.closest("[data-install-app]");
+    if (installButton) {
+      event.preventDefault();
+      showInstallGuide();
+      return;
+    }
+
     const nav = event.target.closest("[data-nav]");
     if (nav) navigate(nav.dataset.nav);
     const actionButton = event.target.closest("[data-action]");
@@ -1619,7 +1632,6 @@ function setupEvents() {
   $("openSettingsBtn").addEventListener("click", openAccountDialog);
   $("homeAccountBtn").addEventListener("click", openAccountDialog);
   $("closeSettingsDialog").addEventListener("click", () => $("settingsDialog").close());
-  $("installAppBtn").addEventListener("click", showInstallGuide);
   updateInstallGuide();
   $("accountSelect").addEventListener("change", () => fillAccountForm($("accountSelect").value));
   $("accountRoleInput").addEventListener("change", updateAdminPasswordBox);

@@ -36,6 +36,15 @@
           <div class="seed-badge" aria-hidden="true">🌱</div>
         </div>
 
+        <section class="panel install-box home-install-panel" aria-labelledby="homeInstallTitle">
+          <div>
+            <p class="eyebrow">Install</p>
+            <h3 id="homeInstallTitle">핸드폰에 앱처럼 설치하기</h3>
+            <p class="muted install-guide-text" id="homeInstallGuideText" data-install-guide-text>홈 화면에 설치하면 주소를 매번 찾지 않고 바로 열 수 있습니다.</p>
+          </div>
+          <button class="secondary small" id="homeInstallAppBtn" data-install-app type="button">앱 설치하기</button>
+        </section>
+
         <section class="panel account-panel" id="accountPanel">
           <div class="section-heading compact-heading">
             <div>
@@ -305,9 +314,9 @@
         <div>
           <p class="eyebrow">Mobile</p>
           <h3 id="installTitle">핸드폰에 설치하기</h3>
-          <p class="muted" id="installGuideText">웹 주소로 접속하면 홈 화면에 앱처럼 추가할 수 있습니다.</p>
+          <p class="muted install-guide-text" id="installGuideText" data-install-guide-text>웹 주소로 접속하면 홈 화면에 앱처럼 추가할 수 있습니다.</p>
         </div>
-        <button class="secondary small" id="installAppBtn" type="button">설치 안내</button>
+        <button class="secondary small" id="installAppBtn" data-install-app type="button">설치 안내</button>
       </section>
       <label>계정 선택
         <select id="accountSelect" aria-label="계정 선택">

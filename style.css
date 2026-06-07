@@ -615,6 +615,16 @@ body[data-background="blossom"] {
   margin: 0;
 }
 
+
+.home-install-panel {
+  margin: 1rem 0;
+  border-color: rgba(66, 107, 77, .26);
+  background: linear-gradient(135deg, rgba(223, 234, 223, .72), rgba(255, 253, 248, .9));
+}
+.home-install-panel button {
+  min-width: 7.5rem;
+}
+
 @media (max-width: 560px) {
   .install-box {
     align-items: stretch;
@@ -759,23 +769,6 @@ body[data-background="blossom"] {
   min-width: 7.5rem;
 }
 
-.verse-carousel-footer {
-  display: flex;
-  justify-content: center;
-  flex-wrap: wrap;
-  gap: .35rem;
-}
-.verse-carousel-footer span {
-  min-width: 1.55rem;
-  height: 1.55rem;
-  display: inline-grid;
-  place-items: center;
-  border-radius: 999px;
-  background: var(--brand-soft);
-  color: var(--brand-dark);
-  font-size: .78rem;
-  font-weight: 900;
-}
 @media (max-width: 640px) {
   .verse-carousel-track { margin-left: -.2rem; margin-right: -.2rem; }
   .verse-carousel-slide { flex-basis: 92%; }
