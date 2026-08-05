@@ -3,8 +3,8 @@
 
 window.MALSEUM_SSIAT_SERVER = {
   mode: "supabase",
-  supabaseUrl: "https://pbscswnfhajbaycyiois.supabase.co",
-  supabaseAnonKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBic2Nzd25maGFqYmF5Y3lpb2lzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA0NzY5OTksImV4cCI6MjA5NjA1Mjk5OX0.lDUKZX4SNHBYaYQiATVixHEsgTIq_mTPygfqGElxOec",
+  supabaseUrl: "https://ocxximwwzzixuzfibnpw.supabase.co",
+  supabaseAnonKey: "sb_publishable_F1wJRa3ZhxSHB6Cp5WAD4Q_y4EHxw9d",
   table: "malseum_ssiat_app_state",
   appId: "bugwang-malseum-ssiat"
 };
