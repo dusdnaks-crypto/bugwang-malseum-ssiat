@@ -1,7 +1,7 @@
 {
   "name": "부광 말씀씨앗",
   "short_name": "부광 말씀씨앗",
-  "description": "부광교회 교회학교와 가정을 위한 성경 암송·복습 웹앱",
+  "description": "가입 없이 바로 쓰고, 선택 계정 동기화와 별도 관리자 모드를 제공하는 부광교회 성경 암송·복습 앱",
   "start_url": "./",
   "display": "standalone",
   "background_color": "#f6f3ec",

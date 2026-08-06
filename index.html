@@ -13,16 +13,101 @@
   <title>부광 말씀씨앗</title>
   <link rel="manifest" href="manifest.json" />
   <link rel="stylesheet" href="style.css" />
-  <script src="config.js?v=20260805-new-server"></script>
+  <script src="config.js"></script>
 </head>
 <body>
-  <div id="app" class="app-shell">
+  <section id="authGate" class="auth-gate" aria-labelledby="authGateTitle">
+    <div class="auth-card">
+      <div class="auth-brand">
+        <div class="seed-badge auth-seed" aria-hidden="true">🌱</div>
+        <p class="eyebrow">부광교회 교회학교</p>
+        <h1 id="authGateTitle">부광 말씀씨앗</h1>
+        <p class="muted">가입 없이 바로 쓰거나, 계정을 만들어 휴대폰과 컴퓨터에서 같은 기록을 이어갈 수 있습니다.</p>
+      </div>
+
+      <div id="authSetupError" class="auth-notice danger-notice hidden" role="alert">
+        서버 보안 설정이 아직 완료되지 않았습니다. 관리자에게 알려 주세요.
+      </div>
+
+      <div id="guestLoadingPanel" class="auth-panel guest-loading-panel">
+        <div class="seed-loader" aria-hidden="true">🌱</div>
+        <strong>말씀밭을 준비하고 있습니다</strong>
+        <p class="muted">잠시만 기다려 주세요.</p>
+      </div>
+
+      <div id="loginPanel" class="auth-panel hidden">
+        <div class="section-heading compact-heading">
+          <div>
+            <p class="eyebrow" id="loginEyebrow">Login</p>
+            <h2 id="loginTitle">기존 계정 로그인</h2>
+          </div>
+        </div>
+        <p id="loginHelp" class="muted tiny-note">다른 기기에서 만들었던 계정으로 로그인하면 같은 기록을 이어갈 수 있습니다.</p>
+        <form id="loginForm">
+          <label>아이디
+            <input id="loginUsername" required autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="가입할 때 만든 아이디" />
+          </label>
+          <label>개인 비밀번호
+            <input id="loginPin" required type="password" inputmode="numeric" pattern="[0-9]{6}" minlength="6" maxlength="6" autocomplete="current-password" placeholder="숫자 6자리" />
+          </label>
+          <button id="loginSubmitBtn" type="submit">로그인</button>
+        </form>
+        <button id="showRegisterBtn" class="secondary auth-switch" type="button">새 계정 만들어 연동하기</button>
+        <button id="cancelAuthBtn" class="ghost auth-switch" type="button">앱으로 돌아가기</button>
+      </div>
+
+      <div id="registerPanel" class="auth-panel hidden">
+        <div class="section-heading compact-heading">
+          <div>
+            <p class="eyebrow">Join</p>
+            <h2>내 계정 만들기</h2>
+          </div>
+        </div>
+        <form id="registerForm">
+          <label>로그인 아이디
+            <input id="registerUsername" required minlength="4" maxlength="20" pattern="[a-z0-9][a-z0-9._-]{3,19}" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="영문 소문자·숫자 4~20자" />
+          </label>
+          <div class="two-col">
+            <label>이름
+              <input id="registerName" required minlength="2" maxlength="20" autocomplete="name" placeholder="예: 김로의" />
+            </label>
+            <label>부서
+              <input id="registerDepartment" required maxlength="30" placeholder="예: 초등부" />
+            </label>
+          </div>
+          <label>구분
+            <select id="registerRole" required>
+              <option value="student">학생</option>
+              <option value="teacher">교사</option>
+              <option value="minister">교역자</option>
+            </select>
+          </label>
+          <div class="two-col">
+            <label>개인 비밀번호
+              <input id="registerPin" required type="password" inputmode="numeric" pattern="[0-9]{6}" minlength="6" maxlength="6" autocomplete="new-password" placeholder="숫자 6자리" />
+            </label>
+            <label>비밀번호 확인
+              <input id="registerPinConfirm" required type="password" inputmode="numeric" pattern="[0-9]{6}" minlength="6" maxlength="6" autocomplete="new-password" placeholder="한 번 더 입력" />
+            </label>
+          </div>
+          <p class="muted tiny-note">지금까지 이 기기에 저장한 암송 기록도 새 계정으로 옮겨집니다. 관리자는 일반 사용자가 선택할 수 없고 서버에서 별도로 지정합니다.</p>
+          <button id="registerSubmitBtn" type="submit">계정 만들고 기기 연동하기</button>
+        </form>
+        <button id="showLoginBtn" class="secondary auth-switch" type="button">이미 계정이 있어요 · 로그인</button>
+        <button id="cancelRegisterBtn" class="ghost auth-switch" type="button">앱으로 돌아가기</button>
+      </div>
+
+      <p id="authStatus" class="auth-status" role="status" aria-live="polite"></p>
+    </div>
+  </section>
+
+  <div id="app" class="app-shell hidden">
     <header class="topbar">
       <div>
         <p class="eyebrow" id="topEyebrow">부광교회 교회학교</p>
         <h1 id="appTitle">부광 말씀씨앗</h1>
       </div>
-      <button class="ghost small" id="openSettingsBtn" type="button" aria-label="계정 열기">계정</button>
+      <button class="ghost small" id="openSettingsBtn" type="button" aria-label="내 계정 열기">내 계정</button>
     </header>
 
     <main>
@@ -49,9 +134,9 @@
           <div class="section-heading compact-heading">
             <div>
               <p class="eyebrow">Account</p>
-              <h3>사용자 계정</h3>
+            <h3>내 암송 기록</h3>
             </div>
-            <button class="ghost small" id="homeAccountBtn" type="button">계정 만들기</button>
+            <button class="ghost small" id="homeAccountBtn" type="button">설정</button>
           </div>
           <div id="accountSummary" class="account-summary"></div>
         </section>
@@ -227,7 +312,7 @@
         </section>
         <section class="panel">
           <h3>등록 계정</h3>
-          <p class="muted">이 기기에 만든 학생/교사/교역자/관리자 계정입니다. 계정별로 암송 진도가 따로 저장됩니다.</p>
+          <p class="muted">관리자만 확인할 수 있는 가입 회원 목록입니다. 일반 사용자는 다른 회원의 계정이나 개인 기록을 볼 수 없습니다.</p>
           <div id="accountList" class="account-list"></div>
         </section>
         <section class="panel" id="adminTextPanel"></section>
@@ -235,14 +320,14 @@
         <section class="panel" id="serverSyncPanel"></section>
         <section class="panel">
           <h3>데이터 백업</h3>
-          <p class="muted">현재 기기에 저장된 말씀과 진도 데이터를 JSON 파일로 보관하거나 다른 기기에 옮길 수 있습니다. 가져오기와 초기화는 관리자 계정에서만 가능합니다.</p>
+          <p class="muted">이 기기의 암송 기록을 JSON 파일로 보관할 수 있습니다. 관리자가 가져오면 공용 말씀 자료도 복원되며, 초기화는 현재 사용 중인 암송 기록에만 적용됩니다.</p>
           <div class="button-row wrap">
             <button id="exportBtn" type="button">내보내기</button>
             <label class="file-label">
               가져오기
               <input id="importInput" type="file" accept="application/json" />
             </label>
-            <button class="danger ghost" id="resetBtn" type="button">초기화</button>
+            <button class="danger ghost" id="resetBtn" type="button">내 기록 초기화</button>
           </div>
         </section>
       </section>
@@ -299,16 +384,16 @@
     </form>
   </dialog>
 
-  <dialog id="settingsDialog" class="dialog">
-    <form method="dialog">
+  <dialog id="settingsDialog" class="dialog settings-dialog">
+    <div class="settings-dialog-content">
       <div class="section-heading">
         <div>
           <p class="eyebrow">Account</p>
-          <h2>사용자 계정</h2>
+          <h2>내 기록과 설정</h2>
         </div>
-        <button class="ghost small" value="cancel" type="button" id="closeSettingsDialog">닫기</button>
+        <button class="ghost small" type="button" id="closeSettingsDialog">닫기</button>
       </div>
-      <p class="muted">이름, 부서, 구분을 등록해 두면 계정별로 암송 진도를 따로 저장할 수 있습니다.</p>
+      <p id="settingsModeHelp" class="muted">가입하지 않고 이 기기에서 바로 쓰거나, 계정을 만들어 여러 기기에서 같은 기록을 이어갈 수 있습니다.</p>
 
       <section class="install-box" aria-labelledby="installTitle">
         <div>
@@ -318,42 +403,43 @@
         </div>
         <button class="secondary small" id="installAppBtn" data-install-app type="button">설치 안내</button>
       </section>
-      <label>계정 선택
-        <select id="accountSelect" aria-label="계정 선택">
-          <option value="">새 계정 만들기</option>
-        </select>
-      </label>
-      <div class="two-col">
-        <label>이름
-          <input id="accountNameInput" placeholder="예: 김로의" />
-        </label>
-        <label>부서
-          <input id="departmentInput" placeholder="예: 유년부 1반, 초등부" />
-        </label>
+      <div id="profileSummary" class="account-summary"></div>
+      <div class="admin-stats">
+        <div class="admin-row"><strong>사용 방식</strong><span id="profileUsername">-</span></div>
+        <div class="admin-row"><strong>이름</strong><span id="profileName">-</span></div>
+        <div class="admin-row"><strong>부서</strong><span id="profileDepartment">-</span></div>
+        <div class="admin-row"><strong>구분</strong><span id="profileRole">-</span></div>
       </div>
-      <label>구분
-        <select id="accountRoleInput">
-          <option value="student">학생</option>
-          <option value="teacher">교사</option>
-          <option value="minister">교역자</option>
-          <option value="admin">관리자</option>
-        </select>
-      </label>
-      <div id="adminPasswordBox" class="admin-password-box hidden">
-        <label>관리자 비밀번호
-          <input id="adminPasswordInput" type="password" inputmode="numeric" autocomplete="current-password" placeholder="관리자 계정은 비밀번호가 필요합니다" />
-        </label>
-        <p id="adminPasswordHint" class="muted">관리자 계정으로 사용할 때만 입력해 주세요.</p>
-      </div>
+      <form id="profileEditForm" class="profile-edit-form">
+        <div class="two-col">
+          <label>표시 이름
+            <input id="profileNameInput" required minlength="2" maxlength="20" placeholder="예: 김로의" />
+          </label>
+          <label>부서
+            <input id="profileDepartmentInput" required maxlength="30" placeholder="예: 초등부" />
+          </label>
+        </div>
+        <button class="secondary" type="submit">이름과 부서 저장</button>
+      </form>
       <div class="button-row wrap">
-        <button id="newAccountBtn" class="secondary" type="button">새 계정 입력</button>
-        <button id="deleteAccountBtn" class="danger ghost" type="button">선택 계정 삭제</button>
-        <button id="saveSettingsBtn" type="button">저장하고 사용하기</button>
+        <button id="accountCreateBtn" class="secondary" type="button">계정 만들어 연동하기</button>
+        <button id="accountLoginBtn" class="ghost" type="button">기존 계정 로그인</button>
+        <button id="logoutBtn" class="danger ghost hidden" type="button">계정에서 로그아웃</button>
       </div>
-    </form>
+      <section class="admin-entry-box">
+        <div>
+          <p class="eyebrow">Admin</p>
+          <strong>관리자 모드</strong>
+          <p class="muted tiny-note">관리자로 지정된 별도 계정만 들어갈 수 있습니다.</p>
+        </div>
+        <button id="adminLoginBtn" type="button">관리자 모드로 들어가기</button>
+        <button id="adminReturnBtn" class="ghost hidden" type="button">일반 모드로 돌아가기</button>
+      </section>
+    </div>
   </dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="auth-client.bundle.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

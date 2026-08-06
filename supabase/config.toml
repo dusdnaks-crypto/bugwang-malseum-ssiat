@@ -1,0 +1,5 @@
+[functions.register-account]
+verify_jwt = false
+
+[functions.admin-reset-pin]
+verify_jwt = false

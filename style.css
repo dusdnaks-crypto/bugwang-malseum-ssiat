@@ -13,6 +13,115 @@
   --radius: 22px;
 }
 
+/* v19 guest-or-account secure start */
+.auth-gate {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 28px 16px;
+}
+
+.auth-card {
+  width: min(100%, 560px);
+  padding: clamp(22px, 5vw, 38px);
+  border: 1px solid var(--line);
+  border-radius: 28px;
+  background: rgba(255, 253, 248, 0.96);
+  background: color-mix(in srgb, var(--panel) 94%, transparent);
+  box-shadow: 0 24px 70px rgba(38, 58, 42, 0.14);
+  backdrop-filter: blur(14px);
+}
+
+.auth-brand {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.auth-brand h1 {
+  margin: 6px 0 10px;
+}
+
+.auth-seed {
+  margin: 0 auto 14px;
+}
+
+.auth-panel form {
+  display: grid;
+  gap: 14px;
+}
+
+.auth-panel button[type="submit"] {
+  width: 100%;
+  margin-top: 4px;
+}
+
+.auth-switch {
+  width: 100%;
+  margin-top: 12px;
+}
+
+.auth-status {
+  min-height: 1.5em;
+  margin: 14px 0 0;
+  text-align: center;
+  color: var(--muted);
+}
+
+.auth-status.error {
+  color: #a33f37;
+}
+
+.guest-loading-panel {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding: 18px 0 4px;
+  text-align: center;
+}
+
+.seed-loader {
+  font-size: 2.5rem;
+  animation: seed-breathe 1.35s ease-in-out infinite;
+}
+
+@keyframes seed-breathe {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-5px) scale(1.08); }
+}
+
+.profile-edit-form {
+  display: grid;
+  gap: 12px;
+  margin: 16px 0;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--brand-soft) 35%, var(--panel));
+}
+
+.auth-notice {
+  padding: 13px 14px;
+  margin-bottom: 16px;
+  border-radius: 14px;
+}
+
+.danger-notice {
+  color: #842f29;
+  background: #fff0ee;
+  border: 1px solid #e7b7b2;
+}
+
+body.auth-locked {
+  overflow: hidden;
+}
+
+@media (max-width: 520px) {
+  .auth-card {
+    border-radius: 22px;
+    padding: 22px 18px;
+  }
+}
+
 * { box-sizing: border-box; }
 html { height: 100%; }
 body {
@@ -277,9 +386,12 @@ input:focus, textarea:focus, select:focus { border-color: var(--brand); box-shad
 
 .dialog {
   width: min(620px, calc(100% - 1.5rem));
+  max-height: calc(100dvh - 2rem);
   border: 0;
   border-radius: 24px;
   padding: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
   box-shadow: var(--shadow);
   background: var(--panel);
   color: var(--ink);
@@ -287,6 +399,33 @@ input:focus, textarea:focus, select:focus { border-color: var(--brand); box-shad
 .dialog::backdrop { background: rgba(20, 28, 23, .35); backdrop-filter: blur(4px); }
 .dialog form { padding: 1.2rem; display: grid; gap: .85rem; }
 .dialog label { display: grid; gap: .4rem; font-weight: 800; color: var(--brand-dark); }
+.settings-dialog {
+  width: min(820px, calc(100% - 3rem));
+  scrollbar-gutter: stable;
+}
+.settings-dialog-content {
+  padding: clamp(1.25rem, 3vw, 2rem);
+}
+.settings-dialog .profile-edit-form {
+  padding: 1rem 0 0;
+}
+.settings-dialog .section-heading {
+  margin-bottom: .55rem;
+}
+.admin-entry-box {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 1.1rem;
+  padding: 1rem;
+  border: 1px solid rgba(66, 107, 77, .2);
+  border-radius: 18px;
+  background: linear-gradient(135deg, rgba(223, 234, 223, .72), rgba(255, 253, 248, .94));
+}
+.admin-entry-box strong { font-size: 1.05rem; }
+.admin-entry-box .muted { margin: .25rem 0 0; }
+.admin-entry-box button { flex: 0 0 auto; }
 .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; }
 .checkbox-line { display: flex !important; align-items: center; gap: .5rem !important; }
 .checkbox-line input { width: auto; }
@@ -332,6 +471,14 @@ input:focus, textarea:focus, select:focus { border-color: var(--brand); box-shad
   .bottom-nav button { font-size: .78rem; }
   .button-row { flex-direction: column-reverse; }
   .button-row button, .file-label { width: 100%; }
+  .settings-dialog {
+    width: calc(100% - 1rem);
+    max-height: calc(100dvh - 1rem);
+    border-radius: 20px;
+  }
+  .settings-dialog-content { padding: 1rem; }
+  .admin-entry-box { align-items: stretch; flex-direction: column; }
+  .admin-entry-box button { width: 100%; }
 }
 
 /* Brand name tweak for 부광 말씀씨앗 */

@@ -1,12 +1,13 @@
-const STORAGE_KEY = "bugwangMalseumSsiat:v7";
-const LEGACY_STORAGE_KEYS = ["bugwangMalseumSsiat:v6", "bugwangMalseumSsiat:v5", "bugwangMalseumSsiat:v4", "bugwangMalseumSsiat:v3", "bugwangMalseumSsiat:v2", "malseumSsiat:v1"];
-const ADMIN_PASSWORD = "1369";
+const STORAGE_KEY = "bugwangMalseumSsiat:v17";
 const REVIEW_INTERVALS = [1, 3, 7, 14, 30, 60];
-let state = loadState();
+let state = defaultState();
 let currentView = "home";
 let selectedVerseId = state.todayVerseId || null;
 let memStep = 0;
-let authenticatedAdminId = null;
+let authProfile = null;
+let loginPurpose = "member";
+let adminAccounts = [];
+let remoteRankingRows = [];
 let deferredInstallPrompt = null;
 let syncReady = false;
 let syncSaveTimer = null;
@@ -111,7 +112,7 @@ function defaultAppText() {
     heroEyebrow: "오늘 마음에 심을 말씀",
     heroTitle: "부광의 다음세대 마음밭에 말씀을",
     heroSubtext: "{{name}}님, 오늘도 말씀 한 알을 마음밭에 심어 보세요.",
-    guestSubtext: "계정을 만들고, 오늘 외우고, 내일 다시 기억하고, 삶 속에 새겨 보세요.",
+    guestSubtext: "가입 없이 바로 시작하고, 오늘 외우고, 내일 다시 기억하고, 삶 속에 새겨 보세요.",
     heroIcon: "🌱",
     memorizePrompt: "말씀을 덮고, 기억나는 만큼 적어 보세요.",
     nextStepButton: "다음",
@@ -147,28 +148,14 @@ function backgroundDesignOptions() {
   ];
 }
 
-function defaultAdminAccount() {
-  return {
-    id: "admin-default",
-    name: "관리자",
-    department: "부광교회",
-    role: "admin",
-    password: ADMIN_PASSWORD,
-    createdAt: "preset"
-  };
-}
-
 function defaultState() {
-  const admin = defaultAdminAccount();
   return {
     appName: "부광 말씀씨앗",
     appText: defaultAppText(),
     appDesign: defaultAppDesign(),
-    accounts: [admin],
+    accounts: [],
     activeAccountId: null,
-    settings: { userName: "", role: "student" },
     verses: [],
-    progress: {},
     progressByAccount: {},
     todayVerseId: null,
     history: []
@@ -191,64 +178,30 @@ function ensureShape(data) {
     number: verse.number ?? verse.memoryNumber ?? ""
   }));
 
-  if (!shaped.accounts.length && shaped.settings?.userName) {
-    const legacyAccount = {
-      id: crypto.randomUUID(),
-      name: shaped.settings.userName,
-      department: "",
-      role: shaped.settings.role === "teacher" ? "teacher" : "student",
-      createdAt: new Date().toISOString()
-    };
-    shaped.accounts.push(legacyAccount);
-    shaped.activeAccountId = legacyAccount.id;
-    if (shaped.progress && Object.keys(shaped.progress).length) {
-      shaped.progressByAccount[legacyAccount.id] = shaped.progress;
-    }
-  }
-
-  if (!shaped.accounts.some(account => account.role === "admin")) {
-    shaped.accounts.unshift(defaultAdminAccount());
-  }
-
-  shaped.accounts = shaped.accounts.map(account => {
-    if (account.role !== "admin") {
-      const { password, ...rest } = account;
-      return rest;
-    }
-    return { ...account, password: account.password || ADMIN_PASSWORD };
-  });
-
   if (shaped.activeAccountId && !shaped.accounts.some(account => account.id === shaped.activeAccountId)) {
     shaped.activeAccountId = null;
-  }
-  if (!shaped.activeAccountId) {
-    shaped.activeAccountId = shaped.accounts.find(account => account.role !== "admin")?.id || null;
   }
   return shaped;
 }
 
-function loadState() {
-  try {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) return ensureShape(JSON.parse(saved));
+function storageKeyForUser(userId = authProfile?.id) {
+  return userId ? `${STORAGE_KEY}:${userId}` : null;
+}
 
-    for (const key of LEGACY_STORAGE_KEYS) {
-      const legacy = localStorage.getItem(key);
-      if (legacy) {
-        const migrated = ensureShape(JSON.parse(legacy));
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated));
-        return migrated;
-      }
-    }
-    return defaultState();
+function loadStateForUser(userId) {
+  try {
+    const key = storageKeyForUser(userId);
+    const saved = key ? localStorage.getItem(key) : null;
+    if (saved) return ensureShape(JSON.parse(saved));
   } catch (error) {
     console.warn(error);
-    return defaultState();
   }
+  return defaultState();
 }
 
 function saveLocalStateOnly() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  const key = storageKeyForUser();
+  if (key) localStorage.setItem(key, JSON.stringify(state));
 }
 
 function saveState(options = {}) {
@@ -263,11 +216,7 @@ function serverConfig() {
 
 function serverModeEnabled() {
   const cfg = serverConfig();
-  return cfg.mode === "supabase" && Boolean(cfg.supabaseUrl) && Boolean(cfg.supabaseAnonKey);
-}
-
-function remoteTableName() {
-  return serverConfig().table || "malseum_ssiat_app_state";
+  return cfg.mode === "supabase-secure" && Boolean(window.MalseumSecure?.configured);
 }
 
 function remoteAppId() {
@@ -282,69 +231,103 @@ function updateSyncStatus(message, detail = "", isEnabled = serverModeEnabled())
   renderServerSyncPanel();
 }
 
-function supabaseEndpoint(path) {
-  const base = String(serverConfig().supabaseUrl || "").replace(/\/+$/, "");
-  return `${base}/rest/v1/${path}`;
-}
-
-async function supabaseRequest(path, options = {}) {
-  const cfg = serverConfig();
-  const headers = {
-    apikey: cfg.supabaseAnonKey,
-    Authorization: `Bearer ${cfg.supabaseAnonKey}`,
-    "Content-Type": "application/json",
-    ...(options.headers || {})
+function sharedStateForServer() {
+  return {
+    appName: state.appName,
+    appText: state.appText,
+    appDesign: state.appDesign,
+    verses: state.verses,
+    todayVerseId: state.todayVerseId
   };
-
-  const response = await fetch(supabaseEndpoint(path), { ...options, headers });
-  if (!response.ok) {
-    const text = await response.text().catch(() => "");
-    throw new Error(text || `서버 응답 오류 ${response.status}`);
-  }
-  if (response.status === 204) return null;
-  const body = await response.text();
-  return body ? JSON.parse(body) : null;
 }
 
-function prepareStateForServer() {
-  return ensureShape(JSON.parse(JSON.stringify(state)));
+function userStateForServer() {
+  if (!authProfile) return { progress: {}, history: [] };
+  return {
+    progress: getProgressMap(authProfile.id),
+    history: state.history
+      .filter(item => !item.accountId || item.accountId === authProfile.id)
+      .map(item => ({ ...item, accountId: authProfile.id }))
+  };
 }
 
-function hasMeaningfulRemoteData(data) {
-  if (!data || typeof data !== "object") return false;
-  return Boolean((Array.isArray(data.verses) && data.verses.length) || (Array.isArray(data.accounts) && data.accounts.length > 1) || (Array.isArray(data.history) && data.history.length));
+function setAuthStatus(message = "", isError = false) {
+  const status = $("authStatus");
+  if (!status) return;
+  status.textContent = message;
+  status.classList.toggle("error", isError);
+}
+
+function setAuthBusy(busy) {
+  ["loginSubmitBtn", "registerSubmitBtn", "showRegisterBtn", "showLoginBtn", "cancelAuthBtn", "cancelRegisterBtn"].forEach(id => {
+    const button = $(id);
+    if (button) button.disabled = Boolean(busy);
+  });
+}
+
+function showAuthGate(mode = "loading") {
+  $("guestLoadingPanel")?.classList.toggle("hidden", mode !== "loading");
+  $("loginPanel")?.classList.toggle("hidden", mode !== "login");
+  $("registerPanel")?.classList.toggle("hidden", mode !== "register");
+  $("authGate")?.classList.remove("hidden");
+  $("app")?.classList.add("hidden");
+  document.body.classList.add("auth-locked");
+}
+
+function showApp() {
+  $("authGate")?.classList.add("hidden");
+  $("app")?.classList.remove("hidden");
+  document.body.classList.remove("auth-locked");
 }
 
 async function pullStateFromServer({ quiet = false } = {}) {
-  if (!serverModeEnabled()) {
-    updateSyncStatus("로컬 저장 모드", "config.js에 Supabase 정보를 입력하면 서버 동기화가 켜집니다.", false);
+  if (!serverModeEnabled() || !authProfile) {
+    updateSyncStatus("사용 준비 중", "기기별 안전한 기록 공간을 준비하고 있습니다.", false);
     return null;
   }
   if (syncBusy) return null;
   syncBusy = true;
   try {
-    updateSyncStatus("서버에서 데이터를 불러오는 중", "잠시만 기다려 주세요.");
-    const table = remoteTableName();
-    const appId = encodeURIComponent(remoteAppId());
-    const rows = await supabaseRequest(`${table}?app_id=eq.${appId}&select=data,updated_at&limit=1`);
-    const remote = Array.isArray(rows) ? rows[0] : null;
-    if (remote?.data && hasMeaningfulRemoteData(remote.data)) {
-      state = ensureShape(remote.data);
-      saveLocalStateOnly();
-      selectedVerseId = state.todayVerseId || selectedVerseId;
-      updateSyncStatus("서버 데이터 불러오기 완료", `마지막 서버 수정: ${remote.updated_at ? new Date(remote.updated_at).toLocaleString("ko-KR") : "확인 안 됨"}`);
-      render();
-      if (!quiet) showToast("서버에서 데이터를 불러왔습니다.");
-      return state;
+    updateSyncStatus("안전하게 동기화하는 중", "공용 말씀과 내 개인 기록을 따로 불러오고 있습니다.");
+    const secure = window.MalseumSecure;
+    const [shared, personal, rankings] = await Promise.all([
+      secure.sharedState(),
+      secure.userState(authProfile.id),
+      secure.rankingRows(weekStart(new Date()))
+    ]);
+
+    if (isAdmin()) {
+      adminAccounts = await secure.adminProfiles();
+    } else {
+      adminAccounts = [];
     }
-    updateSyncStatus("서버에 아직 데이터가 없습니다", "현재 기기의 데이터를 서버에 처음 올립니다.");
-    await pushStateToServer({ quiet: true });
-    if (!quiet) showToast("현재 데이터를 서버에 처음 저장했습니다.");
+
+    const local = loadStateForUser(authProfile.id);
+    const sharedData = shared?.data && typeof shared.data === "object" ? shared.data : {};
+    state = ensureShape({
+      ...local,
+      ...sharedData,
+      accounts: [authProfile],
+      activeAccountId: authProfile.id,
+      progressByAccount: { [authProfile.id]: personal?.progress || {} },
+      history: Array.isArray(personal?.history)
+        ? personal.history.map(item => ({ ...item, accountId: authProfile.id }))
+        : []
+    });
+    remoteRankingRows = Array.isArray(rankings) ? rankings : [];
+    saveLocalStateOnly();
+    selectedVerseId = state.todayVerseId || selectedVerseId;
+    const updateTimes = [shared?.updated_at, personal?.updated_at].filter(Boolean).sort();
+    const updatedAt = updateTimes[updateTimes.length - 1];
+    const syncScope = authProfile.isGuest ? "이 기기 전용 기록 연결됨" : "휴대폰·컴퓨터 공용 계정 연결됨";
+    updateSyncStatus("보안 동기화 완료", `${syncScope}${updatedAt ? ` · ${new Date(updatedAt).toLocaleString("ko-KR")}` : ""}`);
+    render();
+    if (!quiet) showToast("내 기록을 안전하게 불러왔습니다.");
     return state;
   } catch (error) {
     console.warn(error);
-    updateSyncStatus("서버 연결 실패", "config.js 정보와 Supabase 테이블 설정을 확인해 주세요.");
-    if (!quiet) alert("서버에서 데이터를 불러오지 못했습니다. config.js와 Supabase 설정을 확인해 주세요.");
+    updateSyncStatus("서버 연결 실패", "보안 스키마와 서버 설정을 확인해 주세요.");
+    if (!quiet) alert(error.message || "서버에서 데이터를 불러오지 못했습니다.");
     return null;
   } finally {
     syncBusy = false;
@@ -352,27 +335,27 @@ async function pullStateFromServer({ quiet = false } = {}) {
 }
 
 async function pushStateToServer({ quiet = false } = {}) {
-  if (!serverModeEnabled()) return;
-  if (syncBusy) return;
+  if (!serverModeEnabled() || !authProfile) return false;
+  if (syncBusy) return false;
   syncBusy = true;
   try {
-    updateSyncStatus("서버에 저장하는 중", "말씀과 계정, 암송 기록을 함께 저장합니다.");
-    const table = remoteTableName();
-    await supabaseRequest(table, {
-      method: "POST",
-      headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
-      body: JSON.stringify({
-        app_id: remoteAppId(),
-        data: prepareStateForServer(),
-        updated_at: new Date().toISOString()
-      })
-    });
-    updateSyncStatus("서버 저장 완료", "다른 기기에서 새로고침하면 같은 내용을 볼 수 있습니다.");
-    if (!quiet) showToast("서버에 저장했습니다.");
+    updateSyncStatus("내 기록을 저장하는 중", "다른 사람의 기록과 섞이지 않도록 분리해서 저장합니다.");
+    const secure = window.MalseumSecure;
+    const personal = userStateForServer();
+    await secure.saveUserState(authProfile.id, personal);
+    if (isAdmin()) await secure.saveSharedState(sharedStateForServer());
+    remoteRankingRows = await secure.rankingRows(weekStart(new Date()));
+    updateSyncStatus("서버 저장 완료", authProfile.isGuest
+      ? "이 기기 전용 암송 기록이 안전하게 저장되었습니다."
+      : "이 계정의 기록이 저장되어 다른 기기에서도 이어집니다.");
+    renderRanking();
+    if (!quiet) showToast("내 기록을 저장했습니다.");
+    return true;
   } catch (error) {
     console.warn(error);
-    updateSyncStatus("서버 저장 실패", "인터넷 연결, config.js, Supabase 정책을 확인해 주세요.");
-    if (!quiet) alert("서버에 저장하지 못했습니다. 인터넷 연결과 Supabase 설정을 확인해 주세요.");
+    updateSyncStatus("서버 저장 실패", "인터넷 연결과 보안 정책을 확인해 주세요.");
+    if (!quiet) alert(error.message || "서버에 저장하지 못했습니다.");
+    return false;
   } finally {
     syncBusy = false;
   }
@@ -381,17 +364,34 @@ async function pushStateToServer({ quiet = false } = {}) {
 function scheduleServerSave() {
   if (!syncReady || !serverModeEnabled()) return;
   clearTimeout(syncSaveTimer);
-  syncSaveTimer = setTimeout(() => pushStateToServer({ quiet: true }), 650);
+  syncSaveTimer = setTimeout(() => pushStateToServer({ quiet: true }), 900);
 }
 
 async function initServerSync() {
+  showAuthGate("loading");
   if (!serverModeEnabled()) {
-    updateSyncStatus("로컬 저장 모드", "서버 연결을 원하시면 config.js에 Supabase URL과 anon key를 입력해 주세요.", false);
+    $("authSetupError")?.classList.remove("hidden");
+    setAuthStatus("관리자에게 서버 설정 확인을 요청해 주세요.", true);
+    updateSyncStatus("서버 설정 필요", "안전한 자동 시작 설정을 완료해야 사용할 수 있습니다.", false);
     syncReady = false;
     return;
   }
-  syncReady = true;
-  await pullStateFromServer({ quiet: true });
+  try {
+    setAuthStatus("가입 없이 바로 시작할 준비를 하고 있습니다.");
+    await window.MalseumSecure.startAutomatically();
+    authProfile = await window.MalseumSecure.profile();
+    state = loadStateForUser(authProfile.id);
+    state.accounts = [authProfile];
+    state.activeAccountId = authProfile.id;
+    syncReady = true;
+    showApp();
+    await pullStateFromServer({ quiet: true });
+  } catch (error) {
+    console.warn(error);
+    $("guestLoadingPanel")?.classList.add("hidden");
+    $("loginPanel")?.classList.remove("hidden");
+    setAuthStatus(error.message || "자동으로 시작하지 못했습니다. 관리자에게 알려 주세요.", true);
+  }
 }
 
 function normalize(str = "") {
@@ -426,7 +426,7 @@ function isPerfectAnswer(userAnswer, correctAnswer) {
 }
 
 function currentAccount() {
-  return state.accounts.find(account => account.id === state.activeAccountId) || null;
+  return authProfile || null;
 }
 
 function accountKey(accountId = state.activeAccountId) {
@@ -443,12 +443,8 @@ function isAdminAccount(account = currentAccount()) {
   return account?.role === "admin";
 }
 
-function adminPasswordFor(account) {
-  return account?.password || ADMIN_PASSWORD;
-}
-
 function isAdmin(account = currentAccount()) {
-  return isAdminAccount(account) && authenticatedAdminId === account.id;
+  return Boolean(authProfile?.id) && account?.id === authProfile.id && isAdminAccount(account);
 }
 
 function requireAdmin(message = "관리자 계정으로 로그인해야 사용할 수 있습니다.") {
@@ -515,9 +511,7 @@ function renderAppText() {
 function getProgressMap(accountId = state.activeAccountId) {
   const key = accountKey(accountId);
   if (!state.progressByAccount[key]) {
-    state.progressByAccount[key] = key === "guest" && state.progress && Object.keys(state.progress).length
-      ? state.progress
-      : {};
+    state.progressByAccount[key] = {};
   }
   return state.progressByAccount[key];
 }
@@ -721,17 +715,15 @@ function renderAccountSummary() {
   if (!summary || !accountButton) return;
 
   if (!account) {
-    accountButton.textContent = "계정 만들기";
-    summary.innerHTML = `
-      <div class="empty-state">사용할 계정을 선택하거나 새 계정을 만들어 주세요. 관리자 계정은 비밀번호 입력 후 사용할 수 있습니다.</div>
-    `;
+    accountButton.textContent = "설정";
+    summary.innerHTML = `<div class="empty-state">이 기기의 안전한 암송 기록 공간을 준비하고 있습니다.</div>`;
     return;
   }
 
-  accountButton.textContent = "계정 변경";
+  accountButton.textContent = "설정";
   const adminAuthBadge = isAdminAccount(account)
-    ? (isAdmin(account) ? `<span class="badge gold">관리자 인증됨</span>` : `<span class="badge">비밀번호 필요</span>`)
-    : `<span class="badge">현재 사용 중</span>`;
+    ? `<span class="badge gold">관리자</span>`
+    : `<span class="badge">${account.isGuest ? "이 기기에서만 사용" : "여러 기기 동기화"}</span>`;
   summary.innerHTML = `
     <div class="account-card active-account">
       <div>
@@ -974,20 +966,19 @@ function successfulHistoryForAccount(accountId, startDate, endDate) {
 }
 
 function rankingRows() {
-  const start = weekStart(new Date());
-  const end = today();
-  return state.accounts.map(account => {
-    const weeklyHistory = successfulHistoryForAccount(account.id, start, end);
-    const progress = progressSummaryForAccount(account.id);
-    return {
-      account,
-      weeklySuccess: weeklyHistory.length,
-      weeklyUnique: new Set(weeklyHistory.map(item => item.verseId)).size,
-      allTimeSuccess: progress.success,
-      mastered: progress.mastered,
-      due: progress.due
-    };
-  });
+  return remoteRankingRows.map(row => ({
+    account: {
+      id: row.user_id,
+      name: row.display_name,
+      department: row.department,
+      role: row.member_role
+    },
+    weeklySuccess: Number(row.weekly_success) || 0,
+    weeklyUnique: Number(row.weekly_unique) || 0,
+    allTimeSuccess: Number(row.all_time_success) || 0,
+    mastered: Number(row.mastered) || 0,
+    due: 0
+  }));
 }
 
 function renderRanking() {
@@ -996,7 +987,8 @@ function renderRanking() {
   const list = $("rankingList");
   if (!deptFilter || !roleFilter || !list) return;
 
-  const departments = [...new Set(state.accounts.map(account => account.department).filter(Boolean))].sort();
+  const availableRows = rankingRows();
+  const departments = [...new Set(availableRows.map(row => row.account.department).filter(Boolean))].sort();
   const currentDept = deptFilter.value;
   deptFilter.innerHTML = `<option value="">전체 부서</option>` + departments
     .map(dept => `<option value="${escapeHtml(dept)}">${escapeHtml(dept)}</option>`)
@@ -1008,7 +1000,7 @@ function renderRanking() {
   $("rankingPeriod").textContent = `${formatShortDate(start)}–${formatShortDate(end)}`;
 
   const role = roleFilter.value || "student";
-  const rows = rankingRows()
+  const rows = availableRows
     .filter(row => !deptFilter.value || row.account.department === deptFilter.value)
     .filter(row => role === "all" || row.account.role === role)
     .sort((a, b) =>
@@ -1027,8 +1019,8 @@ function renderRanking() {
     <div class="ranking-mini-card"><strong>${totalWeekly}</strong><span>성공 기록</span></div>
   `;
 
-  if (!state.accounts.length) {
-    list.innerHTML = `<div class="empty-state">아직 등록된 계정이 없습니다. 먼저 계정을 만들어 주세요.</div>`;
+  if (!availableRows.length) {
+    list.innerHTML = `<div class="empty-state">아직 이번 주 순위 기록이 없습니다.</div>`;
     return;
   }
 
@@ -1083,9 +1075,9 @@ function renderServerSyncPanel() {
     <p class="muted">${escapeHtml(serverSync.detail || "여러 휴대폰에서 같은 말씀 목록과 암송 기록을 사용하려면 서버 동기화를 켜 주세요.")}</p>
     <div class="button-row wrap">
       <button id="pullServerBtn" class="secondary" type="button" ${enabled ? "" : "disabled"}>서버에서 다시 불러오기</button>
-      <button id="pushServerBtn" type="button" ${enabled && isAdmin() ? "" : "disabled"}>현재 데이터를 서버에 올리기</button>
+      <button id="pushServerBtn" type="button" ${enabled && authProfile ? "" : "disabled"}>내 기록 지금 저장</button>
     </div>
-    <p class="muted tiny-note">서버 설정은 이 폴더의 <code>config.js</code> 파일에서 바꿉니다. 앱에서 바뀐 내용은 자동 저장되고, 수동 업로드는 관리자 계정에서만 가능합니다.</p>
+    <p class="muted tiny-note">공용 말씀과 개인 기록은 서버에서 서로 분리됩니다. 일반 사용자는 자기 기록만 읽고 저장할 수 있습니다.</p>
   `;
 }
 
@@ -1096,7 +1088,7 @@ function renderAdminTextSettings() {
   if (!isAdmin()) {
     panel.innerHTML = `
       <h3>관리자 설정</h3>
-      <p class="muted">앱 문구와 아이콘 변경은 관리자 계정에서만 할 수 있습니다. 상단의 계정 버튼에서 <strong>관리자</strong> 계정으로 전환해 주세요.</p>
+      <p class="muted">앱 문구와 아이콘 변경은 서버에서 관리자 권한을 받은 계정만 할 수 있습니다.</p>
     `;
     return;
   }
@@ -1131,7 +1123,7 @@ function renderAdminTextSettings() {
         <textarea id="textHeroSubtext" rows="3" placeholder="예: {{name}}님, 오늘도 말씀 한 알을 마음밭에 심어 보세요.">${escapeHtml(text.heroSubtext)}</textarea>
       </label>
       <label class="full-width">계정 없을 때 안내 문구
-        <textarea id="textGuestSubtext" rows="3" placeholder="예: 계정을 만들고 말씀을 심어 보세요.">${escapeHtml(text.guestSubtext)}</textarea>
+        <textarea id="textGuestSubtext" rows="3" placeholder="예: 가입 없이 바로 말씀을 심어 보세요.">${escapeHtml(text.guestSubtext)}</textarea>
       </label>
       <label class="full-width">4단계 암송 안내 문구
         <textarea id="textMemorizePrompt" rows="2" placeholder="예: 말씀을 덮고 기억나는 만큼 적어 보세요.">${escapeHtml(text.memorizePrompt)}</textarea>
@@ -1236,7 +1228,7 @@ function renderAdminDesignSettings() {
   if (!isAdmin()) {
     panel.innerHTML = `
       <h3>배경 디자인 설정</h3>
-      <p class="muted">앱 배경 디자인 변경은 관리자 계정에서만 할 수 있습니다. 관리자 계정으로 전환한 뒤 비밀번호를 입력해 주세요.</p>
+      <p class="muted">앱 배경 디자인 변경은 서버에서 관리자 권한을 받은 계정만 할 수 있습니다.</p>
     `;
     return;
   }
@@ -1304,7 +1296,7 @@ function renderAdmin() {
   $("adminStats").innerHTML = `
     <div class="admin-row"><strong>현재 계정</strong><span>${account ? `${escapeHtml(account.name)} · ${roleLabel(account.role)}` : "미등록"}</span></div>
     <div class="admin-row"><strong>관리자 설정 권한</strong><span>${isAdmin(account) ? "문구·배경·말씀·서버 관리 가능" : "관리자 계정 필요"}</span></div>
-    <div class="admin-row"><strong>등록 계정</strong><span>${state.accounts.length}개</span></div>
+    <div class="admin-row"><strong>사용 기록</strong><span>${isAdmin() ? `${adminAccounts.length}개` : "관리자만 확인"}</span></div>
     <div class="admin-row"><strong>등록 말씀</strong><span>${state.verses.length}개</span></div>
     <div class="admin-row"><strong>오늘 복습 예정</strong><span>${dueVerses().length}개</span></div>
     <div class="admin-row"><strong>익숙한 말씀</strong><span>${mastered}개</span></div>
@@ -1313,22 +1305,27 @@ function renderAdmin() {
 
   const accountList = $("accountList");
   if (!accountList) return;
-  if (!state.accounts.length) {
-    accountList.innerHTML = `<div class="empty-state">아직 등록된 계정이 없습니다. 상단의 계정 버튼에서 새 계정을 만들어 주세요.</div>`;
+  if (!isAdmin()) {
+    accountList.innerHTML = `<div class="empty-state">다른 회원의 계정은 보이지 않습니다. 회원 목록은 관리자만 확인할 수 있습니다.</div>`;
     return;
   }
-  accountList.innerHTML = state.accounts.map(accountItem => {
-    const summary = progressSummaryForAccount(accountItem.id);
-    const active = accountItem.id === state.activeAccountId ? " active-account" : "";
-    const adminStatus = accountItem.role === "admin" ? (isAdmin(accountItem) ? " · 인증됨" : " · 비밀번호 필요") : "";
+  if (!adminAccounts.length) {
+    accountList.innerHTML = `<div class="empty-state">아직 저장된 사용 기록이 없습니다.</div>`;
+    return;
+  }
+  accountList.innerHTML = adminAccounts.map(accountItem => {
+    const active = accountItem.id === authProfile?.id ? " active-account" : "";
     return `
       <article class="account-card${active}">
         <div>
           <strong>${escapeHtml(accountItem.name)}</strong>
-          <p>${escapeHtml(accountItem.department || "부서 미입력")} · ${roleLabel(accountItem.role)}${adminStatus}</p>
-          <p class="muted">복습 ${summary.due}개 · 암송 완료 ${summary.memorized}개 · 성공 ${summary.success}회 · 익숙한 말씀 ${summary.mastered}개</p>
+          <p>${escapeHtml(accountItem.department || "부서 미입력")} · ${roleLabel(accountItem.role)}</p>
+          <p class="muted">${accountItem.isGuest ? "가입 없이 사용하는 기기별 기록" : `아이디 ${escapeHtml(accountItem.username || "-")}`} · 시작 ${escapeHtml(accountItem.createdAt ? new Date(accountItem.createdAt).toLocaleDateString("ko-KR") : "-")}</p>
         </div>
-        <button class="small ghost" data-action="switchAccount" data-id="${accountItem.id}" type="button">사용</button>
+        <div class="button-row wrap">
+          ${active ? `<span class="badge gold">내 계정</span>` : `<span class="badge">보호됨</span>`}
+          ${accountItem.isGuest ? `<span class="badge">자동 사용자</span>` : `<button class="small ghost" data-action="resetMemberPin" data-id="${accountItem.id}" type="button">비밀번호 초기화</button>`}
+        </div>
       </article>
     `;
   }).join("");
@@ -1376,135 +1373,233 @@ function openVerseDialog(verse = null) {
   $("verseDialog").showModal();
 }
 
-function populateAccountSelect(selectedId = state.activeAccountId || "") {
-  const select = $("accountSelect");
-  select.innerHTML = `<option value="">새 계정 만들기</option>` + state.accounts
-    .map(account => `<option value="${account.id}">${escapeHtml(account.name)} · ${escapeHtml(account.department || "부서 미입력")} · ${roleLabel(account.role)}</option>`)
-    .join("");
-  select.value = selectedId && state.accounts.some(account => account.id === selectedId) ? selectedId : "";
-}
-
-function fillAccountForm(accountId = "") {
-  const account = state.accounts.find(item => item.id === accountId);
-  $("accountNameInput").value = account?.name || "";
-  $("departmentInput").value = account?.department || "";
-  $("accountRoleInput").value = account?.role || "student";
-  $("adminPasswordInput").value = "";
-  $("deleteAccountBtn").disabled = !account;
-  updateAdminPasswordBox();
-}
-
-function updateAdminPasswordBox() {
-  const box = $("adminPasswordBox");
-  const hint = $("adminPasswordHint");
-  if (!box || !hint) return;
-  const selected = state.accounts.find(item => item.id === $("accountSelect")?.value);
-  const role = $("accountRoleInput")?.value || "student";
-  const needsPassword = selected?.role === "admin" || role === "admin";
-  box.classList.toggle("hidden", !needsPassword);
-
-  if (!needsPassword) return;
-  if (selected?.role === "admin" && isAdmin(selected)) {
-    hint.textContent = "이미 인증된 관리자 계정입니다. 계속 사용할 수 있습니다.";
-  } else if (selected?.role === "admin") {
-    hint.textContent = "관리자 계정을 사용하려면 비밀번호를 입력해 주세요.";
-  } else if (role === "admin") {
-    hint.textContent = "새 관리자 계정 생성이나 관리자 전환은 인증된 관리자 계정에서만 가능합니다.";
-  }
-}
-
 function openAccountDialog() {
-  populateAccountSelect(state.activeAccountId || "");
-  fillAccountForm($("accountSelect").value);
-  $("settingsDialog").showModal();
+  const account = currentAccount();
+  if (!account) {
+    showAuthGate();
+    return;
+  }
+  if ($("profileUsername")) $("profileUsername").textContent = account.isGuest
+    ? "가입 없이 사용 · 이 기기 전용"
+    : `${account.username || "-"} · 자동 로그인`;
+  if ($("profileName")) $("profileName").textContent = account.name || "-";
+  if ($("profileDepartment")) $("profileDepartment").textContent = account.department || "-";
+  if ($("profileRole")) $("profileRole").textContent = roleLabel(account.role);
+  if ($("profileNameInput")) $("profileNameInput").value = account.name || "";
+  if ($("profileDepartmentInput")) $("profileDepartmentInput").value = account.department || "";
+  if ($("settingsModeHelp")) {
+    $("settingsModeHelp").textContent = isAdminAccount(account)
+      ? "관리자 모드입니다. 말씀과 공용 설정을 관리한 뒤 일반 모드로 돌아갈 수 있습니다."
+      : account.isGuest
+      ? "현재 기록은 이 기기에서만 이어집니다. 계정을 만들면 지금 기록을 그대로 옮겨 휴대폰과 컴퓨터에서 함께 사용할 수 있습니다."
+      : "이 계정은 이 기기에 자동 로그인되며, 다른 기기에서도 같은 아이디와 숫자 6자리 번호로 기록을 이어갈 수 있습니다.";
+  }
+  $("accountCreateBtn")?.classList.toggle("hidden", !account.isGuest);
+  $("accountLoginBtn")?.classList.toggle("hidden", !account.isGuest);
+  $("logoutBtn")?.classList.toggle("hidden", account.isGuest || isAdminAccount(account));
+  $("adminLoginBtn")?.classList.toggle("hidden", isAdminAccount(account));
+  $("adminReturnBtn")?.classList.toggle("hidden", !isAdminAccount(account));
+  if ($("profileSummary")) {
+    $("profileSummary").innerHTML = `
+      <div class="account-card active-account">
+        <div>
+          <strong>${escapeHtml(account.name)}</strong>
+          <p>${escapeHtml(account.department)} · ${roleLabel(account.role)}</p>
+        </div>
+        <span class="badge gold">${account.isGuest ? "이 기기 기록" : (isAdminAccount(account) ? "관리자" : "기기간 동기화")}</span>
+      </div>`;
+  }
+  if (!$("settingsDialog").open) $("settingsDialog").showModal();
 }
 
-function saveAccountFromForm() {
-  const name = $("accountNameInput").value.trim();
-  const department = $("departmentInput").value.trim();
-  const role = $("accountRoleInput").value;
-  const selected = $("accountSelect").value;
-  const passwordInput = $("adminPasswordInput")?.value.trim() || "";
-
-  const selectedAccount = state.accounts.find(account => account.id === selected);
-  const adminCount = state.accounts.filter(account => account.role === "admin").length;
-  const selectedIsAdmin = selectedAccount?.role === "admin";
-  const selectedAdminUnlocked = selectedIsAdmin && (isAdmin(selectedAccount) || passwordInput === adminPasswordFor(selectedAccount));
-
-  if (selectedIsAdmin && !selectedAdminUnlocked) {
-    alert("관리자 비밀번호가 맞지 않습니다.");
-    return;
-  }
-  if (!selectedIsAdmin && role === "admin" && !isAdmin()) {
-    alert("새 관리자 계정을 만들거나 관리자 권한으로 바꾸려면 먼저 관리자 계정으로 로그인해야 합니다.");
-    return;
-  }
-  if (selectedIsAdmin && role !== "admin" && adminCount <= 1) {
-    alert("관리자 계정은 최소 1개 이상 필요합니다.");
-    return;
-  }
-
-  if (!name) {
-    alert("이름을 입력해 주세요.");
-    return;
-  }
-  if (!department) {
-    alert("부서를 입력해 주세요.");
-    return;
-  }
-
-  let id = selected;
-  if (id) {
-    const index = state.accounts.findIndex(account => account.id === id);
-    if (index >= 0) {
-      const existing = state.accounts[index];
-      const updated = { ...existing, name, department, role, updatedAt: new Date().toISOString() };
-      if (role === "admin") updated.password = existing.password || ADMIN_PASSWORD;
-      else delete updated.password;
-      state.accounts[index] = updated;
-    }
-  } else {
-    id = crypto.randomUUID();
-    const newAccount = { id, name, department, role, createdAt: new Date().toISOString() };
-    if (role === "admin") newAccount.password = ADMIN_PASSWORD;
-    state.accounts.push(newAccount);
-  }
-
-  if (role === "admin") authenticatedAdminId = id;
-  else if (authenticatedAdminId === id) authenticatedAdminId = null;
-  state.activeAccountId = id;
-  getProgressMap(id);
-  $("settingsDialog").close();
-  saveState();
-  showToast(role === "admin" ? "관리자 계정으로 로그인했습니다." : "계정을 저장하고 선택했습니다.");
+function toggleAuthPanel(showRegister) {
+  $("guestLoadingPanel")?.classList.add("hidden");
+  $("loginPanel")?.classList.toggle("hidden", showRegister);
+  $("registerPanel")?.classList.toggle("hidden", !showRegister);
+  setAuthStatus("");
+  setTimeout(() => (showRegister ? $("registerUsername") : $("loginUsername"))?.focus(), 0);
 }
 
-function deleteSelectedAccount() {
-  const id = $("accountSelect").value;
-  const account = state.accounts.find(item => item.id === id);
-  if (!account) return;
-  const passwordInput = $("adminPasswordInput")?.value.trim() || "";
-  if (account.role === "admin") {
-    if (!isAdmin(account) && passwordInput !== adminPasswordFor(account)) {
-      alert("관리자 계정을 삭제하려면 관리자 비밀번호가 필요합니다.");
-      return;
-    }
-    if (state.accounts.filter(item => item.role === "admin").length <= 1) {
-      alert("관리자 계정은 최소 1개 이상 필요합니다.");
-      return;
-    }
-  }
-  if (!confirm(`${account.name} 계정을 삭제할까요? 해당 계정의 암송 진도도 함께 지워집니다.`)) return;
+async function finishAuthentication() {
+  authProfile = await window.MalseumSecure.profile();
+  state = loadStateForUser(authProfile.id);
+  state.accounts = [authProfile];
+  state.activeAccountId = authProfile.id;
+  syncReady = true;
+  showApp();
+  await pullStateFromServer({ quiet: true });
+  setAuthStatus("");
+}
 
-  state.accounts = state.accounts.filter(item => item.id !== id);
-  delete state.progressByAccount[id];
-  state.history = state.history.filter(item => item.accountId !== id);
-  if (authenticatedAdminId === id) authenticatedAdminId = null;
-  if (state.activeAccountId === id) state.activeAccountId = state.accounts.find(item => item.role !== "admin")?.id || null;
-  populateAccountSelect(state.activeAccountId || "");
-  fillAccountForm($("accountSelect").value);
-  saveState();
-  showToast("계정을 삭제했습니다.");
+async function openAccountLogin() {
+  await pushStateToServer({ quiet: true }).catch(() => {});
+  loginPurpose = "member";
+  $("loginEyebrow").textContent = "Login";
+  $("loginTitle").textContent = "기존 계정 로그인";
+  $("loginHelp").textContent = "다른 기기에서 만들었던 계정으로 로그인하면 같은 기록을 이어갈 수 있습니다.";
+  $("showRegisterBtn")?.classList.remove("hidden");
+  $("settingsDialog")?.close();
+  toggleAuthPanel(false);
+  showAuthGate("login");
+  setAuthStatus("다른 기기에서 만들었던 계정으로 로그인해 주세요.");
+}
+
+async function openAdminLogin() {
+  await pushStateToServer({ quiet: true }).catch(() => {});
+  $("settingsDialog")?.close();
+  setAuthStatus("저장된 관리자 로그인을 확인하고 있습니다.");
+
+  try {
+    const session = await window.MalseumSecure.resumeAdmin();
+    if (session) {
+      await finishAuthentication();
+      showToast("관리자 모드로 들어왔습니다.");
+      return;
+    }
+  } catch (error) {
+    console.warn(error);
+  }
+
+  loginPurpose = "admin";
+  $("loginEyebrow").textContent = "Admin";
+  $("loginTitle").textContent = "관리자 로그인";
+  $("loginHelp").textContent = "Supabase에서 관리자로 지정된 별도 계정의 아이디와 숫자 6자리 번호를 입력해 주세요.";
+  $("showRegisterBtn")?.classList.add("hidden");
+  toggleAuthPanel(false);
+  showAuthGate("login");
+  setAuthStatus("관리자 계정으로 로그인해 주세요.");
+}
+
+async function handleAdminReturn() {
+  clearTimeout(syncSaveTimer);
+  await pushStateToServer({ quiet: true }).catch(() => {});
+  window.MalseumSecure.useRegularMode();
+  authProfile = null;
+  adminAccounts = [];
+  remoteRankingRows = [];
+  syncReady = false;
+  state = defaultState();
+  selectedVerseId = null;
+  $("settingsDialog")?.close();
+  await initServerSync();
+  showToast("일반 모드로 돌아왔습니다.");
+}
+
+async function openAccountCreate() {
+  await pushStateToServer({ quiet: true }).catch(() => {});
+  loginPurpose = "member";
+  if (authProfile) {
+    $("registerName").value = authProfile.name?.startsWith("말씀친구 ") ? "" : (authProfile.name || "");
+    $("registerDepartment").value = authProfile.department === "부광교회" ? "" : (authProfile.department || "");
+    $("registerRole").value = ["student", "teacher", "minister"].includes(authProfile.role) ? authProfile.role : "student";
+  }
+  $("settingsDialog")?.close();
+  toggleAuthPanel(true);
+  showAuthGate("register");
+  setAuthStatus("현재 기기의 암송 기록도 새 계정으로 함께 옮겨집니다.");
+}
+
+function cancelAccountLogin() {
+  setAuthStatus("");
+  if (authProfile) {
+    showApp();
+    return;
+  }
+  initServerSync();
+}
+
+async function handleProfileUpdate(event) {
+  event.preventDefault();
+  const submit = event.currentTarget.querySelector('button[type="submit"]');
+  if (submit) submit.disabled = true;
+  try {
+    authProfile = await window.MalseumSecure.updateOwnProfile(
+      $("profileNameInput").value,
+      $("profileDepartmentInput").value
+    );
+    state.accounts = [authProfile];
+    state.activeAccountId = authProfile.id;
+    saveLocalStateOnly();
+    render();
+    openAccountDialog();
+    showToast("이름과 부서를 저장했습니다.");
+  } catch (error) {
+    alert(error.message || "표시 정보를 저장하지 못했습니다.");
+  } finally {
+    if (submit) submit.disabled = false;
+  }
+}
+
+async function handleLogin(event) {
+  event.preventDefault();
+  const username = $("loginUsername").value.trim().toLowerCase();
+  const pin = $("loginPin").value;
+  setAuthBusy(true);
+  setAuthStatus(loginPurpose === "admin" ? "관리자 권한을 확인하고 있습니다." : "로그인하고 있습니다.");
+  try {
+    if (loginPurpose === "admin") {
+      await window.MalseumSecure.signInAdmin(username, pin);
+    } else {
+      await window.MalseumSecure.signIn(username, pin);
+    }
+    await finishAuthentication();
+    $("loginPin").value = "";
+    showToast(loginPurpose === "admin" ? "관리자 모드로 들어왔습니다." : "내 계정으로 로그인했습니다.");
+  } catch (error) {
+    setAuthStatus(error.message || "로그인하지 못했습니다.", true);
+  } finally {
+    setAuthBusy(false);
+  }
+}
+
+async function handleRegister(event) {
+  event.preventDefault();
+  const pin = $("registerPin").value;
+  if (pin !== $("registerPinConfirm").value) {
+    setAuthStatus("두 비밀번호가 서로 다릅니다.", true);
+    return;
+  }
+  setAuthBusy(true);
+  setAuthStatus("현재 기록을 안전한 계정으로 옮기고 있습니다.");
+  try {
+    const guestRecordSaved = await pushStateToServer({ quiet: true });
+    if (!guestRecordSaved) throw new Error("현재 기기 기록을 서버에 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.");
+    await window.MalseumSecure.registerAccount({
+      username: $("registerUsername").value,
+      displayName: $("registerName").value,
+      department: $("registerDepartment").value,
+      memberRole: $("registerRole").value,
+      pin
+    });
+    await finishAuthentication();
+    $("registerForm").reset();
+    showToast("계정이 만들어졌습니다. 이제 다른 기기에서도 이어갈 수 있습니다.");
+  } catch (error) {
+    setAuthStatus(error.message || "계정을 만들지 못했습니다.", true);
+  } finally {
+    setAuthBusy(false);
+  }
+}
+
+async function handleLogout() {
+  if (!confirm("이 계정에서 로그아웃하고 이 기기 전용 모드로 돌아갈까요? 서버에 저장된 계정 기록은 그대로 남습니다.")) return;
+  clearTimeout(syncSaveTimer);
+  await pushStateToServer({ quiet: true }).catch(() => {});
+  try {
+    await window.MalseumSecure.signOut();
+  } catch (error) {
+    alert(error.message || "로그아웃하지 못했습니다.");
+    return;
+  }
+  authProfile = null;
+  adminAccounts = [];
+  remoteRankingRows = [];
+  syncReady = false;
+  state = defaultState();
+  selectedVerseId = null;
+  $("settingsDialog")?.close();
+  await initServerSync();
+  showToast("이 기기 전용 모드로 돌아왔습니다.");
 }
 
 function practiceResult(verseId, success, options = {}) {
@@ -1547,25 +1642,27 @@ function practiceResult(verseId, success, options = {}) {
   showToast(message);
 }
 
-function handleVerseAction(target) {
+async function handleVerseAction(target) {
   const action = target.dataset.action;
   const id = target.dataset.id;
   if (!action || !id) return;
 
-  if (action === "switchAccount") {
-    const account = state.accounts.find(account => account.id === id);
-    if (!account) return;
-    if (account.role === "admin" && !isAdmin(account)) {
-      const input = prompt("관리자 비밀번호를 입력해 주세요.");
-      if (input !== adminPasswordFor(account)) {
-        alert("관리자 비밀번호가 맞지 않습니다.");
-        return;
-      }
-      authenticatedAdminId = account.id;
+  if (action === "resetMemberPin") {
+    if (!isAdmin()) return;
+    const member = adminAccounts.find(account => account.id === id);
+    if (!member) return;
+    const pin = prompt(`${member.name} 회원의 새 숫자 6자리 비밀번호를 입력해 주세요.`) || "";
+    if (!/^\d{6}$/.test(pin)) {
+      alert("숫자 6자리로 입력해 주세요.");
+      return;
     }
-    state.activeAccountId = id;
-    saveState();
-    showToast(account.role === "admin" ? "관리자 계정으로 로그인했습니다." : "계정을 변경했습니다.");
+    if (!confirm(`${member.name} 회원의 비밀번호를 새 번호로 초기화할까요?`)) return;
+    try {
+      await window.MalseumSecure.resetMemberPin(id, pin);
+      showToast("회원 비밀번호를 초기화했습니다.");
+    } catch (error) {
+      alert(error.message || "비밀번호를 초기화하지 못했습니다.");
+    }
     return;
   }
 
@@ -1613,7 +1710,6 @@ function setupEvents() {
     if (event.target.closest("#resetAppDesignBtn")) resetAppDesignSettings();
     if (event.target.closest("#pullServerBtn")) pullStateFromServer();
     if (event.target.closest("#pushServerBtn")) {
-      if (!requireAdmin("서버에 데이터를 올리려면 관리자 계정으로 로그인해야 합니다.")) return;
       pushStateToServer();
     }
   });
@@ -1633,15 +1729,18 @@ function setupEvents() {
   $("homeAccountBtn").addEventListener("click", openAccountDialog);
   $("closeSettingsDialog").addEventListener("click", () => $("settingsDialog").close());
   updateInstallGuide();
-  $("accountSelect").addEventListener("change", () => fillAccountForm($("accountSelect").value));
-  $("accountRoleInput").addEventListener("change", updateAdminPasswordBox);
-  $("newAccountBtn").addEventListener("click", () => {
-    $("accountSelect").value = "";
-    fillAccountForm("");
-    $("accountNameInput").focus();
-  });
-  $("deleteAccountBtn").addEventListener("click", deleteSelectedAccount);
-  $("saveSettingsBtn").addEventListener("click", saveAccountFromForm);
+  $("loginForm").addEventListener("submit", handleLogin);
+  $("registerForm").addEventListener("submit", handleRegister);
+  $("showRegisterBtn").addEventListener("click", () => toggleAuthPanel(true));
+  $("showLoginBtn").addEventListener("click", () => toggleAuthPanel(false));
+  $("cancelAuthBtn").addEventListener("click", cancelAccountLogin);
+  $("cancelRegisterBtn").addEventListener("click", cancelAccountLogin);
+  $("accountCreateBtn").addEventListener("click", openAccountCreate);
+  $("accountLoginBtn").addEventListener("click", openAccountLogin);
+  $("adminLoginBtn").addEventListener("click", openAdminLogin);
+  $("adminReturnBtn").addEventListener("click", handleAdminReturn);
+  $("profileEditForm").addEventListener("submit", handleProfileUpdate);
+  $("logoutBtn").addEventListener("click", handleLogout);
 
   $("sampleBtn").addEventListener("click", () => {
     $("numberInput").value = $("numberInput").value || nextVerseNumber();
@@ -1718,7 +1817,19 @@ function setupEvents() {
   $("rankingRoleFilter").addEventListener("change", renderRanking);
 
   $("exportBtn").addEventListener("click", () => {
-    const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
+    const backup = {
+      format: "bugwang-malseum-ssiat-secure-v19",
+      exportedAt: new Date().toISOString(),
+      profile: {
+        username: authProfile.username,
+        name: authProfile.name,
+        department: authProfile.department,
+        role: authProfile.role
+      },
+      shared: sharedStateForServer(),
+      personal: userStateForServer()
+    };
+    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -1727,30 +1838,65 @@ function setupEvents() {
     URL.revokeObjectURL(url);
   });
   $("importInput").addEventListener("change", async (event) => {
-    if (!requireAdmin("데이터 가져오기는 관리자 계정으로 로그인해야 사용할 수 있습니다.")) {
-      event.target.value = "";
-      return;
-    }
     const file = event.target.files?.[0];
     if (!file) return;
     try {
       const imported = JSON.parse(await file.text());
-      state = ensureShape(imported);
+      let personal = null;
+      let shared = null;
+
+      if (["bugwang-malseum-ssiat-secure-v17", "bugwang-malseum-ssiat-secure-v18", "bugwang-malseum-ssiat-secure-v19"].includes(imported?.format)) {
+        if (!authProfile.isGuest && imported.profile?.username !== authProfile.username) {
+          throw new Error("이 백업은 현재 사용 중인 기록의 백업이 아닙니다.");
+        }
+        personal = imported.personal || {};
+        shared = imported.shared || null;
+      } else {
+        const legacyAccounts = Array.isArray(imported?.accounts) ? imported.accounts : [];
+        const legacy = legacyAccounts.find(account =>
+          account.name === authProfile.name && account.department === authProfile.department
+        );
+        if (legacy) {
+          personal = {
+            progress: imported.progressByAccount?.[legacy.id] || {},
+            history: (Array.isArray(imported.history) ? imported.history : [])
+              .filter(item => item.accountId === legacy.id)
+          };
+        }
+        shared = {
+          appName: imported.appName,
+          appText: imported.appText,
+          appDesign: imported.appDesign,
+          verses: imported.verses,
+          todayVerseId: imported.todayVerseId
+        };
+      }
+
+      if (!personal && !isAdmin()) throw new Error("현재 계정과 일치하는 개인 기록을 찾지 못했습니다.");
+      if (personal) {
+        state.progressByAccount = { [authProfile.id]: personal.progress || {} };
+        state.history = (Array.isArray(personal.history) ? personal.history : [])
+          .map(item => ({ ...item, accountId: authProfile.id }));
+      }
+      if (shared && isAdmin()) {
+        state = ensureShape({ ...state, ...shared });
+      }
+      state.accounts = [authProfile];
+      state.activeAccountId = authProfile.id;
       saveState();
-      showToast("데이터를 가져왔습니다.");
+      showToast(isAdmin() ? "백업 자료를 안전한 구조로 가져왔습니다." : "내 암송 기록을 가져왔습니다.");
     } catch (error) {
-      alert("가져오기에 실패했습니다. JSON 백업 파일인지 확인해 주세요.");
+      alert(error.message || "가져오기에 실패했습니다. JSON 백업 파일인지 확인해 주세요.");
     }
     event.target.value = "";
   });
   $("resetBtn").addEventListener("click", () => {
-    if (!requireAdmin("초기화는 관리자 계정으로 로그인해야 사용할 수 있습니다.")) return;
-    if (confirm("모든 계정, 말씀, 진도 기록을 지울까요? 이 작업은 되돌릴 수 없습니다.")) {
-      localStorage.removeItem(STORAGE_KEY);
-      Object.assign(state, defaultState());
-      selectedVerseId = null;
+    if (confirm("내 암송 진도와 연습 기록만 초기화할까요? 공용 말씀과 다른 회원의 기록은 지워지지 않습니다.")) {
+      state.progressByAccount = { [authProfile.id]: {} };
+      state.history = [];
+      selectedVerseId = state.todayVerseId || null;
       saveState();
-      showToast("초기화했습니다.");
+      showToast("내 암송 기록을 초기화했습니다.");
     }
   });
 }
