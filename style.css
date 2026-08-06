@@ -893,18 +893,21 @@ body[data-background="blossom"] {
 }
 .verse-carousel-track {
   display: flex;
+  align-items: flex-start;
   gap: .85rem;
   overflow-x: auto;
+  overflow-y: hidden;
   scroll-snap-type: x mandatory;
   -webkit-overflow-scrolling: touch;
   padding: .15rem .15rem .75rem;
   scrollbar-width: thin;
+  transition: height .2s ease;
 }
 .verse-carousel-slide {
   flex: 0 0 min(100%, 560px);
   scroll-snap-align: start;
 }
-.verse-carousel-slide .verse-card { height: 100%; }
+.verse-carousel-slide .verse-card { height: auto; }
 
 .verse-carousel-controls {
   display: flex;

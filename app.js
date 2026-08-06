@@ -753,6 +753,32 @@ function scrollHomeVerseCarousel(direction = 1) {
 
   nextLeft = Math.max(0, Math.min(maxScroll, nextLeft));
   track.scrollTo({ left: nextLeft, behavior: "smooth" });
+  window.setTimeout(() => resizeHomeVerseCarousel(track), 280);
+}
+
+function resizeHomeVerseCarousel(track = document.querySelector("#todayVerseCard .verse-carousel-track")) {
+  if (!track) return;
+  const slides = [...track.querySelectorAll(".verse-carousel-slide")];
+  if (!slides.length) return;
+  const firstWidth = slides[0].getBoundingClientRect().width || track.clientWidth;
+  const gap = parseFloat(getComputedStyle(track).columnGap || getComputedStyle(track).gap) || 0;
+  const index = Math.max(0, Math.min(slides.length - 1, Math.round(track.scrollLeft / Math.max(1, firstWidth + gap))));
+  const slide = slides[index];
+  const styles = getComputedStyle(track);
+  const verticalPadding = (parseFloat(styles.paddingTop) || 0) + (parseFloat(styles.paddingBottom) || 0);
+  const naturalHeight = slide.scrollHeight || slide.getBoundingClientRect().height;
+  if (naturalHeight > 0) track.style.height = `${Math.ceil(naturalHeight + verticalPadding)}px`;
+}
+
+function setupHomeVerseCarousel() {
+  const track = document.querySelector("#todayVerseCard .verse-carousel-track");
+  if (!track) return;
+  let resizeTimer = null;
+  track.addEventListener("scroll", () => {
+    window.clearTimeout(resizeTimer);
+    resizeTimer = window.setTimeout(() => resizeHomeVerseCarousel(track), 90);
+  }, { passive: true });
+  window.requestAnimationFrame(() => resizeHomeVerseCarousel(track));
 }
 
 function renderHome() {
@@ -785,6 +811,7 @@ function renderHome() {
         <button class="small ghost" data-carousel-dir="1" type="button">다음 구절</button>
       </div>
     `;
+    setupHomeVerseCarousel();
   }
 
   const due = dueVerses().slice(0, 3);
@@ -1917,6 +1944,8 @@ window.addEventListener("appinstalled", () => {
   updateInstallGuide();
   showToast("부광 말씀씨앗이 홈 화면에 설치되었습니다.");
 });
+
+window.addEventListener("resize", () => resizeHomeVerseCarousel());
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {

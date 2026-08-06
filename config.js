@@ -1,4 +1,4 @@
-// 부광 말씀씨앗 v21 선택형 계정·별도 관리자 모드 공개 클라이언트 설정
+// 부광 말씀씨앗 v22 모바일 카드·선택형 계정·별도 관리자 모드 공개 클라이언트 설정
 // publishable key는 브라우저용 공개 키입니다. service_role key는 절대로 여기에 넣지 마세요.
 window.MALSEUM_SSIAT_SERVER = {
   mode: "supabase-secure",

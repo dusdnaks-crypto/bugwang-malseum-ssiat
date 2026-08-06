@@ -1,10 +1,10 @@
-부광 말씀씨앗 v21 교회 배포 순서
+부광 말씀씨앗 v22 교회 배포 순서
 
 1. SQL Editor에서 supabase_schema.sql을 실행합니다.
 2. Authentication → Sign In / Providers에서 Anonymous Sign-Ins를 켭니다.
 3. register-account Edge Function을 배포합니다.
 4. ALLOWED_ORIGINS를 https://dusdnaks-crypto.github.io 로 설정합니다.
-5. v21 폴더 안 파일들을 GitHub 저장소 최상위에 덮어씁니다.
+5. v22 폴더 안 파일들을 GitHub 저장소 최상위에 덮어씁니다.
 6. 시크릿 창에서 가입 없이 바로 시작되는지 확인합니다.
 7. 계정을 만들어 현재 기록이 계정으로 옮겨지는지 확인합니다.
 8. 다른 기기에서 같은 계정으로 로그인해 기록이 나타나는지 확인합니다.
